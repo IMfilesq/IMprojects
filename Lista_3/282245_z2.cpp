@@ -57,7 +57,7 @@ int main(){
     int len;
     cout << "ile liczb? ";
     cin >> len;
-    int arr[len];
+    int* arr = new int[len];
     cout << "podaj liczby ";
     for(int i = 0; i < len; i++){
         cin >> arr[i];
