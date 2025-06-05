@@ -1,1 +1,1 @@
-This repository contains projects I made for university lessons or independently on my own
+This repository contains projects I made independently or for my univeristy classes
