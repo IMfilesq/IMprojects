@@ -1,0 +1,632 @@
+---
+title: "Lista 2"
+subtitle: "Eksploracja danych"
+author: "Igor Misterowicz, 282245"
+date: "`r Sys.Date()`"
+header-includes:
+   - \usepackage[utf8]{inputenc}
+   - \usepackage{graphicx}
+   - \usepackage{float}
+output: 
+  pdf_document:
+    toc: true
+    fig_caption: yes
+    fig_width: 5 
+    fig_height: 4 
+    number_sections: true
+fontsize: 12pt 
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "", fig.align = "center")
+
+library(utils)
+library(xtable)
+library(ggplot2)
+library(e1071)
+library(arules)
+library(tidyr)
+library(factoextra)
+library(titanic)
+library(cluster)
+library(VIM)
+library(corrplot)
+
+```
+
+
+
+# Zadanie 1
+
+## a.
+
+Pracujemy na danych iris
+
+```{r, echo=TRUE, eval=TRUE}
+attach(iris)
+head(iris)
+```
+
+
+## b.
+
+Szukam cech o najlepszych i najgorszych zdolnościach dyskryminacyjnych
+
+
+```{r, echo=TRUE, eval=TRUE}
+y_ax = runif(nrow(iris))
+
+ggplot(iris, aes(x = Sepal.Length, y = y_ax, color = Species)) +
+  geom_point() + ylab("")
+
+ggplot(iris, aes(x = Sepal.Width, y = y_ax, color = Species)) + 
+  geom_point() + ylab("")
+
+ggplot(iris, aes(x = Petal.Length, y = y_ax, color = Species)) + 
+  geom_point() + ylab("")
+
+ggplot(iris, aes(x = Petal.Width, y = y_ax, color = Species)) + 
+  geom_point() + ylab("")
+
+```
+
+Wizualnie dane dobrze różnicują zmienne Sepal, natomiast gorzej Petal. Patrzymy teraz na wariancje.
+
+
+```{r, echo=TRUE, eval=TRUE}
+apply(iris, 2,FUN = var)
+```
+
+Największą wariancję ma Petal.Length, a najmniejszą Sepal.Width. Tą pierwszą możemy uznać za zmienną o najlepszych, a drugą o najgorszych zdolnościach dyskryminacyjnych.
+
+## c.
+
+Testujemy różne algorytmy dyskretyzacji nienadzorowanej
+
+```{r, echo=TRUE, eval=TRUE}
+n <- nrow(iris)
+y <- runif(n)
+
+x <- iris[,"Petal.Length"]
+x.disc.equal.freq <- discretize(x, breaks = 3,method = "frequency") 
+breaks.equal.frequency <- attributes(x.disc.equal.freq)$"discretized:breaks"
+plot(x, y, col=iris$Species, main = "Metoda: frequency", xlab = "Petal.Length",
+     ylab = "")
+abline(v = breaks.equal.frequency, col = "red", lwd=3)
+legend(x = "topright", legend=levels(iris$Species), col=1:3,
+       pch=21, bg = "azure")
+
+matchClasses(table(discretize(Petal.Length, method = "frequency", breaks = 3)
+                   , iris$Species))
+```
+
+
+```{r, echo=TRUE, eval=TRUE}
+n <- nrow(iris)
+y <- runif(n)
+
+x <- iris[,"Petal.Length"]
+x.disc.equal.freq <- discretize(x, breaks = 3, method = "interval") 
+breaks.equal.frequency <- attributes(x.disc.equal.freq)$"discretized:breaks"
+plot(x, y, col=iris$Species, main = "Metoda: interval",xlab = "Petal.Length",
+     ylab = "")
+abline(v = breaks.equal.frequency, col = "red", lwd=3)
+legend(x = "topright", legend=levels(iris$Species), col=1:3, pch=21,
+       bg = "azure")
+
+matchClasses(table(discretize(Petal.Length, method = "interval", breaks = 3)
+                   , iris$Species))
+```
+
+
+```{r, echo=TRUE, eval=TRUE}
+n <- nrow(iris)
+y <- runif(n)
+
+x <- iris[,"Petal.Length"]
+x.disc.equal.freq <- discretize(x, breaks = 3, method = "cluster") 
+breaks.equal.frequency <- attributes(x.disc.equal.freq)$"discretized:breaks"
+plot(x, y, col=iris$Species, main = "Metoda: cluster",xlab = "Petal.Length",
+     ylab = "")
+abline(v = breaks.equal.frequency, col = "red", lwd=3)
+legend(x = "topright", legend=levels(iris$Species), col=1:3, pch=21,
+       bg = "azure")
+
+matchClasses(table(discretize(Petal.Length, method = "cluster", breaks = 3)
+                   , iris$Species))
+```
+
+
+```{r, echo=TRUE, eval=TRUE}
+n <- nrow(iris)
+y <- runif(n)
+
+x <- iris[,"Petal.Length"]
+x.disc.equal.freq <- discretize(x, method = "fixed",
+                                breaks = c(-Inf, 2.5, 5, Inf)) 
+breaks.equal.frequency <- attributes(x.disc.equal.freq)$"discretized:breaks"
+plot(x, y, col=iris$Species, main = "Metoda: fixed",xlab = "Petal.Length",
+     ylab = "")
+abline(v = breaks.equal.frequency, col = "red", lwd=3)
+legend(x = "topright", legend=levels(iris$Species), col=1:3, pch=21,
+       bg = "azure")
+
+matchClasses(table(discretize(Petal.Length, method = "fixed",
+                              breaks = c(-Inf, 2.5, 5, Inf))
+                   , iris$Species))
+```
+
+```{r, echo=TRUE, eval=TRUE}
+n <- nrow(iris)
+y <- runif(n)
+
+x <- iris[,"Sepal.Width"]
+x.disc.equal.freq <- discretize(x, breaks = 3,method = "frequency") 
+breaks.equal.frequency <- attributes(x.disc.equal.freq)$"discretized:breaks"
+plot(x, y, col=iris$Species, main = "Metoda: frequency",xlab = "Sepal.Width",
+     ylab = "")
+abline(v = breaks.equal.frequency, col = "red", lwd=3)
+legend(x = "topright", legend=levels(iris$Species), col=1:3, pch=21,
+       bg = "azure")
+
+matchClasses(table(discretize(Sepal.Width, method = "frequency", breaks = 3)
+                   , iris$Species))
+```
+
+```{r, echo=TRUE, eval=TRUE}
+n <- nrow(iris)
+y <- runif(n)
+
+x <- iris[,"Sepal.Width"]
+x.disc.equal.freq <- discretize(x, breaks = 3, method = "interval") 
+breaks.equal.frequency <- attributes(x.disc.equal.freq)$"discretized:breaks"
+plot(x, y, col=iris$Species, main = "Metoda: interval",
+     xlab = "Sepal.Width", ylab = "")
+abline(v = breaks.equal.frequency, col = "red", lwd=3)
+legend(x = "topright", legend=levels(iris$Species), col=1:3, pch=21,
+       bg = "azure")
+
+matchClasses(table(discretize(Sepal.Width, method = "interval", breaks = 3)
+                   , iris$Species))
+```
+
+```{r, echo=TRUE, eval=TRUE}
+n <- nrow(iris)
+y <- runif(n)
+
+x <- iris[,"Sepal.Width"]
+x.disc.equal.freq <- discretize(x, breaks = 3, method = "cluster") 
+breaks.equal.frequency <- attributes(x.disc.equal.freq)$"discretized:breaks"
+plot(x, y, col=iris$Species, main = "Metoda: cluster",xlab = "Sepal.Width",
+     ylab = "")
+abline(v = breaks.equal.frequency, col = "red", lwd=3)
+legend(x = "topright", legend=levels(iris$Species), col=1:3, pch=21,
+       bg = "azure")
+
+matchClasses(table(discretize(Sepal.Width, method = "cluster", breaks = 3)
+                   , iris$Species))
+```
+
+```{r, echo=TRUE, eval=TRUE}
+n <- nrow(iris)
+y <- runif(n)
+
+x <- iris[,"Sepal.Width"]
+x.disc.equal.freq <- discretize(x, method = "fixed",
+                                breaks = c(-Inf, 3, 3.5, Inf)) 
+breaks.equal.frequency <- attributes(x.disc.equal.freq)$"discretized:breaks"
+plot(x, y, col=iris$Species, main = "Metoda: fixed",xlab = "Sepal.Width",
+     ylab = "")
+abline(v = breaks.equal.frequency, col = "red", lwd=3)
+legend(x = "topright", legend=levels(iris$Species), col=1:3, pch=21,
+       bg = "azure")
+
+matchClasses(table(discretize(Sepal.Width, method = "fixed",
+                              breaks = c(-Inf, 3, 3.5, Inf))
+                   , iris$Species))
+```
+
+
+
+Wybrany algorytm nie ma większego znaczenia, skuteczności są podobne. Odstaje jedynie metoda "interval" w przypadku zmiennej Sepal.width.
+
+
+# Zadanie 2
+
+## a.
+
+Analiza danych jakości życia
+
+## b.
+
+Wczytuję dane
+
+
+```{r, echo=TRUE, eval=TRUE, result = "asis"}
+p <- "C:/Users/igorm/Programowanie/data_mining/list2_files/uaScoresDataFrame.csv"
+data <- read.csv(p)
+
+```
+
+Zera wpisane w zmienne numeryczne możemy uznać za brakujące dane. Zastępuje je średnią wartością pięciu najbliżsyzch sąsiadów.
+
+
+```{r, echo=TRUE, eval=TRUE, results = "asis"}
+
+data[data == 0] <- NA
+data<-kNN(data,variable=colnames(data),k=5,imp_var = FALSE)
+
+```
+
+Tworzę ramkę składającą się z samych zmiennych ilościowych.
+
+```{r, echo=TRUE, eval=TRUE}
+
+types <- function(d) {
+data.frame(names(d), sapply(d, class))
+}
+types(data)
+
+num_data <- subset(data, select = c(-UA_Country,-UA_Continent,-UA_Name,-X))
+```
+
+Obliczam wariancje
+
+```{r, echo=TRUE, eval=TRUE, results = "asis"}
+df <- apply(num_data,2, FUN = var)
+df <- as.data.frame(df)
+
+variance <- df[,1]
+variable <- rownames(df)
+
+ggplot(NULL, aes(x = variable, y= variance)) + geom_col() +
+  geom_text(label = round(variance,1), vjust = 0) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        text = element_text(size = 8)) + 
+  xlab("")
+
+
+```
+
+Największą wariancję ma Housing, a najmniejszą Commute.
+
+Porównuję teraz rozrzuty na wykresie pudełkowym
+
+```{r, echo=TRUE, eval=TRUE, results = "asis"}
+
+df_long <- pivot_longer(
+  num_data,
+  cols = colnames(num_data),
+  names_to = "column",
+  values_to = "score"
+)
+
+
+ggplot(df_long, aes(x = column, y = score)) +
+  geom_boxplot() +
+  xlab("Variable") + ylab("Score") +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  xlab("") +
+  ylab("score") + 
+  ggtitle("Porównanie rozrzutu zmiennych",) 
+
+
+```
+Różnice w wariancjach i średnich są znaczące, co sugeruje konieczność standaryzacji danych. Najbardziej oddalone od siebie wartości średnie mają Business.freedom oraz Venture.capital.
+
+## c.
+
+Składowe główne oraz ich wykresy pudełkowe
+
+```{r, echo=TRUE, eval=TRUE}
+
+scaled <- as.data.frame(scale(num_data))
+
+pca_result <- prcomp(scaled)
+
+pca_long <- pivot_longer(
+  as.data.frame(pca_result$rotation),
+  cols = colnames(as.data.frame(pca_result$x)),
+  names_to = "column",
+  values_to = "score"
+)
+
+ord <- rep("PC",17)
+for(i in 1:17){
+  ord[i] <- paste0(ord[i],i)
+}
+
+pca_long$column <- factor(pca_long$column, levels = ord)
+
+
+ggplot(pca_long, aes(x = column, y = score)) +
+  geom_boxplot() +
+  xlab("Variable") + ylab("Score") +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  xlab("") +
+  ylab("score") + 
+  ggtitle("Porównanie rozrzutu składowych głównych",) 
+
+
+```
+
+Trzy pierwsze składowe
+
+```{r, echo=TRUE, eval=TRUE}
+pca_df <- as.data.frame(subset(pca_result$rotation, select = c(PC1,PC2,PC3)))
+pca_df
+
+```
+
+Zmienne o największej wadze 
+
+* w PC1 
+  + dodatnie:
+    - Cost.of.Living
+    - Housing
+  + ujemne:
+    - Business.freedom
+    - Education
+  + Reprezentuje niskie koszta życia oraz słaby potencjał do zarobków
+* W PC2
+  + dodatnie:
+    - Safety
+    - Tolerance
+  + ujemne:
+    - Startups
+    - Venture.capital
+  + Reprezentuje bezpieczeństwo oraz niesprzyjające warunki dla małych przedsiębiorstw
+* W PC3
+  + dodatnie:
+    - Economy
+  + ujemne:
+    - Commute
+    - Travel.connectivity
+  + Reprezentuje zdrowie lokalnej gospodarki oraz niski poziom udogodnień
+
+
+
+## d.
+
+Procentowy udział składowych w wariancji
+
+```{r, echo=TRUE, eval=TRUE}
+variance <- 100*(pca_result$sdev^2)/sum(pca_result$sdev^2)
+cumulative.variance <- cumsum(variance)
+
+
+barplot(cumulative.variance, main="Skumulowana wariancja (w %)",
+names.arg=paste0("PC",1:17),col="orchid1")
+abline(h=80, col="lightblue", lty=2, lwd=2)
+abline(h=90, col="blue", lty=2, lwd=2)
+legend("right", legend=c("80%","90%"),
+       lwd=2, lty=2, col=c("lightblue","blue"),)
+
+```
+
+7 pierwszych zmiennych odpowiada za 80%, a 11 pierwszych za 90% wariancji.
+
+## e.
+
+Wizualizacja składowych głównych
+
+```{r, echo=TRUE, eval=TRUE}
+temp_df <- data.frame(PC1 = -pca_result$x[, 1],
+                      PC2 = -pca_result$x[, 2],
+                      PC3 = -pca_result$x[, 3],
+                      city = data$UA_Name,
+                      country = data$UA_Country,
+                      continent = data$UA_Continent)
+
+
+
+ggplot(temp_df,aes(x = PC1, y = PC2, colour = continent)) + geom_point() + 
+  stat_ellipse(aes(fill = continent), geom = "polygon", alpha = 0.2,
+               colour = NA) +
+    geom_text(aes(label = city, vjust = -0.5),check_overlap = TRUE,
+              color = "black")  
+
+ggplot(temp_df,aes(x = PC1, y = PC3, colour = continent)) + geom_point() + 
+  stat_ellipse(aes(fill = continent), geom = "polygon", alpha = 0.2,
+               colour = NA) +
+  geom_text(aes(label = city, vjust = -0.5),check_overlap = TRUE,
+            color = "black")
+
+
+ggplot(temp_df,aes(x = PC2, y = PC3, colour = continent)) + geom_point() + 
+  stat_ellipse(aes(fill = continent), geom = "polygon", alpha = 0.2,
+               colour = NA) + 
+  geom_text(aes(label = city, vjust = -0.5),check_overlap = TRUE,
+            color = "black") 
+  
+
+```
+
+Szukam miast o ekstremalnych wartościach składowych głównych
+
+```{r, echo=TRUE, eval=TRUE}
+cities <- rbind(temp_df[order(temp_df$PC1), ][1,],
+                temp_df[order(-temp_df$PC1), ][1,],
+                temp_df[order(temp_df$PC2), ][1,],
+                temp_df[order(-temp_df$PC2), ][1,],
+                temp_df[order(temp_df$PC3), ][1,],
+                temp_df[order(-temp_df$PC3), ][1,],
+                deparse.level = 0)
+
+cities
+```
+
+Możemy odczytać kraj oraz kontynent miast odstjących od reszty.
+
+* Największy oraz najmniejszy wskaźnik PC1 mają Singapur oraz Caracas.
+* Największy oraz najmniejszy wskaźnik PC2 mają Los Angeles oraz Aarhus.
+* Największy oraz najmniejszy wskaźnik PC3 mają Tokyo oraz Birmingham.
+
+
+## f.
+
+Wykres korelacji na biplocie
+
+```{r, echo=TRUE, eval=TRUE}
+fviz_pca_biplot(pca_result, label  = "var", col.ind = data$UA_Continent,
+                repel = T, title = "")
+```
+
+Housing i Cost.of.living mają wyraźnie inny kierunek od reszty zmiennych, pododnie w przypadku Venture.Capital i Startups.
+
+Macierz korelacji
+```{r, echo=TRUE, eval=TRUE}
+
+correlation.matrix <- cor(num_data)
+corrplot(correlation.matrix)
+
+```
+
+
+Zauważamy następujące grupy korelacj:
+
+* Cost.of.living, Housing
+* Business.freedom, Helathcare, Education
+* Venture.capital, Startups
+
+Wszystie trzy grupy są do siebie negatywnie skorelowane.
+
+
+## g.
+
+Wykres korelacji na biplocie bez standaryzacji
+
+```{r, echo=TRUE, eval=TRUE}
+pca_result <- prcomp(num_data,center = F)
+fviz_pca_biplot(pca_result, label  = "var", col.ind = data$UA_Continent,
+                repel = T, title = "")
+```
+
+Ewidentnie standaryzacja była konieczna.
+
+  Dają się zauważyć pewne zależności między naszymi składowymi głównymi, a kontynentami. Otzymujemy wyniki zgodne z intuicją tzn:
+  
+* niski potencjał do zarobków w Afryce, Azji oraz Ameryce Południowej (PC1)
+* tolerancja i bezpieczeństwo w Europie, jednak mniej korzystne warunki dla startupów (PC2)
+* duża ilość udogodnień w Europie (PC3)
+
+Są jednak pewne miasta, które nie wpasowują się w powyższe zależności. Przykładem jest Singapur z rekordowym wskaźnikiem PC1. Wbrew pozorom w Ameryce Północnej wysokie finansowanie startupów ma tylko kilka odstających miast np Los Angeles.
+
+  Pierwsze trzy komponenty składowe reprezentują trzy najważniesze grupy korelacji oraz odpowiadają za 60% całej zmienności. Wobec tego naszą reprezentację możemy uznać za zadawalającą.
+  
+
+
+
+
+# zadanie 3
+
+## a.
+
+Analiza danych z pakietu titanic
+
+## b. 
+
+Wczytuję dane i zmieniam typy
+
+
+```{r, echo=TRUE, eval=TRUE}
+data <- titanic_train
+str(data)
+data <- na.omit(data)
+data$Sex <- as.factor(data$Sex)
+data$Embarked <- as.factor(data$Embarked)
+data$Survived <- sapply(data$Survived,
+                        FUN = function(x) ifelse(x == 1, "Yes", "No"))
+data$Survived <- as.factor(data$Survived)
+data$Pclass <- as.ordered(data$Pclass)
+Pclass <- data$Pclass
+data <- subset(data, select = c(-PassengerId,-Pclass,-Name, -Ticket,-Cabin))
+```
+
+Zapisuję jednak zmienną Pclass, ponieważ będzie ona potrzebna w dalszej części analizy
+
+## c.
+
+Tworzę macierz odmienności
+
+```{r, echo=TRUE, eval=TRUE}
+dissimilarities <- daisy(subset(data, select = c(-Survived)), stand=T)
+dis.matrix <- as.matrix(dissimilarities)
+```
+
+Wizualizacja jakości odwzorowania
+
+```{r, echo=TRUE, eval=TRUE}
+mds.results <- cmdscale(dis.matrix, k=2)
+mds_distances <- dist(mds.results)
+
+smp <- sample(1:length(dissimilarities),2000)
+plot(dissimilarities[smp],mds_distances[smp], pch = 16, cex = 0.5)
+abline(coef=c(0,1), col="red", lty=2, lwd=2)
+```
+
+Miejscami dane znacząco odstają od prostej y = x, zatem jakość odwzorowania może nie być zadawalająca.
+
+## d.
+
+Wizualizacja skalowania wielowymiarowego
+
+```{r, echo=TRUE, eval=TRUE}
+data$MD1 <- mds.results[,1]
+data$MD2 <- mds.results[,2]
+data$Pclass <- Pclass
+
+ggplot(data, aes(x = MD1, y = MD2, colour = Survived)) +
+  geom_point(alpha = 0.7)
+```
+
+  Widzimy, że dane układają się w sześć skupisk. Nie determinują one całkowicie przeżywalności, jednak możemy zauważyć, że przypadki o ujemnej wartości MD1 znacznie częściej uchodziły z życiem.
+  Znajdujemy kilka nieznacznie odstających obserwacji w prawym górnym i w lewym górnym rogu.
+Mają one najwyższe wartości MD2 oraz ekstremalne wartości MD1.
+
+
+Przeżywalność ze względu na płeć
+
+```{r, echo=TRUE, eval=TRUE}
+
+ggplot(data, aes(x = MD1, y = MD2, colour = Sex)) + geom_point(alpha = 0.7)
+
+
+```
+
+  Teraz widzimy, że mężczyźni mają dodatnią wartość MD1, natomiast kobiety ujemną. Jest to najważnieszy czynnik determinujący przeżywalność.
+  
+Przeżywalność ze wględu na klasę
+
+```{r, echo=TRUE, eval=TRUE}
+
+ggplot(data, aes(x = MD1, y = MD2, colour = Pclass)) + geom_point(alpha = 0.7)
+
+
+# procentwa przeżywalność w klasie 1
+a <- nrow(data[data$Survived == "Yes" & data$Pclass == 1,])
+b <- nrow(data[data$Pclass == 1,])
+a/b
+
+# procentwa przeżywalność w klasie 2
+a <- nrow(data[data$Survived == "Yes" & data$Pclass == 2,])
+b <- nrow(data[data$Pclass == 2,])
+a/b
+
+# procentwa przeżywalność w klasie3
+a <- nrow(data[data$Survived == "Yes" & data$Pclass == 3,])
+b <- nrow(data[data$Pclass == 3,])
+a/b
+
+
+
+
+```
+
+Widzimy, że pasażerowie z lepszych klas mieli znacząco wyższą przeżywalność. Dają się zauważyć pewne skupiska w podziale na klasy, jendak nie są one wyraźne.

@@ -1,0 +1,319 @@
+---
+title: "Lista 1"
+subtitle: "Eksploracja danych"
+author: "Igor Misterowicz, 282245"
+date: "`r Sys.Date()`"
+header-includes:
+   - \usepackage[utf8]{inputenc}
+   - \usepackage{graphicx}
+   - \usepackage{float}
+output: 
+  pdf_document:
+    toc: true
+    fig_caption: yes
+    fig_width: 5 
+    fig_height: 4 
+    number_sections: true
+fontsize: 12pt 
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "", fig.align = "center")
+
+library(xtable)
+library(ggplot2)
+library(dplyr)
+```
+
+
+
+# Etap 1
+
+## a.
+
+Wczytuję dane oraz upewniam się, że typy są prawidłowo rozpoznane.
+
+```{r, echo=TRUE, eval=TRUE}
+setwd('C:/Users/igorm/Programowanie/data_mining/files')
+data <- read.csv("WA_Fn-UseC_-Telco-Customer-Churn.csv",stringsAsFactors = T)
+data$SeniorCitizen <- sapply(data$SeniorCitizen,
+                             FUN = function(x) ifelse(x == 1, "Yes", "No"))
+data$SeniorCitizen <- as.factor(data$SeniorCitizen)
+attach(data)
+```
+
+Poprawy wymagała jedynie kolumna "SeniorCitizen", ponieważ kodowanie danych nie było spójne z resztą tabeli.
+
+## b.
+
+Liczba przypadków wynosi:
+
+```{r, echo=TRUE, eval=TRUE}
+nrow(data)
+```
+
+Liczba cech wynosi:
+
+```{r, echo=TRUE, eval=TRUE}
+ncol(data)
+```
+
+Rolę identyfikatora spełnia kolumna "customerID", będzie ona nieprzydatna w analizie, ponieważ nie interesują nas poszczególni klienci, tylko wnioski odnoszące się do ogółu.
+
+```{r, echo=TRUE, eval=TRUE}
+data <- subset(data, select = -customerID)
+```
+
+Braki danych znajdziemy jedynie w kolumnie "TotalCharges". 
+
+```{r, echo=TRUE, eval=TRUE}
+anyNA(TotalCharges)
+
+anyNA(subset(data, select = c(-TotalCharges)))
+
+```
+
+"No internet service" występujący w dodatkach do usług internetowych też w pewnym sensie jest brakującą daną. Mimo to, postać ta jest przydana w analizie, ponieważ wiemy jak ją interpretować.
+
+```{r, echo=TRUE, eval=TRUE}
+levels(OnlineSecurity)
+```
+
+# Etap 2
+
+## a.
+
+W tabeli \ref{tab:tabela1} znajdujemy wkaźniki sumaryczne dla wybranych zmiennych ilościowych, rozkłady zmiennych ilościowych zostaną zilustrowane na wykresach.
+
+
+```{r, echo=TRUE, eval=TRUE, results = "asis"}
+my.summary <- function(X)
+{
+  result <- c(min(X),quantile(X,0.25), median(X), mean(X), quantile(X,0.75),
+              max(X), var(X), sd(X), IQR(X))
+  return(result)
+}
+
+result <- data.frame(tenure = my.summary(tenure),
+                     MonthlyCharges = my.summary(MonthlyCharges),
+                     TotalCharges = my.summary(
+                     TotalCharges[!is.na(TotalCharges)]),
+                     row.names = c("min", "Q1", "median", "mean", "Q3", "max",
+                                   "var", "sd", "IQR"))
+result <- as.matrix(result)
+
+tab1 <- xtable(result, digits = 2, row.names = TRUE,
+               caption = "wybrane wskaźniki sumaryczne dla zmiennych ciągłych",
+               label = "tab:tabela1")
+print(tab1, type = "latex", table.placement = "H", comment=FALSE)
+```
+
+## b.
+
+Ilustrujemy teraz wykresy zmiennych ilościowych 
+
+```{r, echo=TRUE, eval=TRUE}
+par(mfrow = c(1,2))
+ggplot(data, aes(x = MonthlyCharges)) + geom_histogram()
+ggplot(data, aes(x = MonthlyCharges)) + geom_boxplot()
+```
+
+```{r, echo=TRUE, eval=TRUE}
+par(mfrow = c(1,2))
+ggplot(data, aes(x = TotalCharges)) + geom_histogram()
+ggplot(data, aes(x = TotalCharges)) + geom_boxplot()
+```
+
+```{r, echo=TRUE, eval=TRUE}
+par(mfrow = c(1,2))
+ggplot(data, aes(x = tenure)) + geom_histogram()
+ggplot(data, aes(x = tenure)) + geom_boxplot()
+```
+
+Wykresy kołowe dla zmiennych jakościowych
+
+```{r, echo=TRUE, eval=TRUE}
+
+for(i in 1:ncol(data)){
+  if(is.factor(data[[i]])){
+    counts <- table(data[[i]])
+    percents <- round(100 * counts / sum(counts), 1)
+    labels <- paste(names(counts), "\n", percents, "%", sep = "")
+    pie(counts, labels = labels, main = colnames(data)[i])  
+  }
+}
+
+```
+
+## c.
+
+Wykresy rozrzutu dla zmiennych ciągłych
+
+```{r, echo=TRUE, eval=TRUE}
+ggplot(data, aes(x = MonthlyCharges, y = TotalCharges)) + geom_point(size = 1) +
+  geom_smooth(method = "lm")
+
+ggplot(data, aes(x = tenure, y = MonthlyCharges)) + geom_point(size = 1) +
+  geom_smooth(method = "lm")
+
+ggplot(data, aes(x = tenure, y = TotalCharges)) + geom_point(size = 1) +
+  geom_smooth(method = "lm")
+```
+
+
+
+## d.
+
+### Zależności między zmiennymi ciągłymi
+
+Zależności między "MonthlyCharges", a "TotalCharges" oraz między "tenure", a "TotalCharges" nie są zaskakujące. Ciekawą obserwacją jest natomiast, że "tenure" jest skorelowany z "MonthlyCharges", tzn. klienci z długim starzem mają większe opłaty miesięczne.
+
+### Zakresy zmiennych ilościowych 
+
+Dla zmiennych "tenure", "MonthlyCharges", "TotalCharges" zakresy zmienności wynoszą odpowiednio (0,72), (18.25,118.75) oraz (18.8,8684.8). "TotalCharges" ma największe odchylenie standardowe, wynoszące 2266.77.
+
+### Opis rozkładów
+
+Zmienna "TotalCharges" jest silnie zagęszczona przy zerze, obserwacje "MonthlyCharges" rzadko pojawiają się w przedziale (25,40). Rozkład "Tenure" jest mniej więcej symetryczny, przypomina literę "U" z niewielkim zagęszczeniem z lewej strony.
+
+### Częstość przyjmowania kategorii zmiennych jakościowych
+
+Mężczyzn jest tyle samo co kobiet, połowa osób posiada partnera. Seniorzy stanowią niewielką część klientów. Większość nie posiada osób zależnych. Klienci prawie zawsze korzystają z usług telefonicznych. Większą popularnością od DSL cieszy się internet światłowodowy. Pośród każdej z dodatkowych usług tj. bezpieczeństwo online, kopia zapasowa online, ochrona urządzenia i wsparcie techniczne, aż trzy czwarte klientów z niej nie korzysta. Niewiele wiekszą popularnością cieszą się usługi streamingowe. Najczęściej wybieranym okresem płatności jest miesięczny, a klienci rzadziej wybierają rachunek na papierze. Wszystkie dostępne formy płatności są równie atrakcyjne. Do tej pory tylko jedna czwarta klientów odeszła od firmy.
+
+# Etap 3
+
+## a.
+
+Wskaźniki sumaryczne z uwzględnieniem podziału na grupy
+
+```{r, echo=TRUE, eval=TRUE,results = "asis"}
+my.summary <- function(X)
+{
+  result <- c(min(X),quantile(X,0.25), median(X), mean(X), quantile(X,0.75),
+              max(X), var(X), sd(X), IQR(X))
+  return(result)
+}
+
+data_ChurnN <- subset(data, subset = (Churn == "No"))
+data_ChurnY <- subset(data, subset = (Churn == "Yes"))
+
+
+result_N <- data.frame(tenure = my.summary(data_ChurnN$tenure),
+                     MonthlyCharges = my.summary(data_ChurnN$MonthlyCharges),
+                     TotalCharges = my.summary(
+                     data_ChurnN$TotalCharges[
+                     !is.na(data_ChurnN$TotalCharges)]),
+                     row.names = c("min", "Q1", "median", "mean", "Q3", "max",
+                                   "var", "sd", "IQR"))
+
+tab1 <- xtable(result_N, digits = 2, row.names = TRUE,
+               caption = "wybrane wskaźniki dla obecnych klientów",
+               label = "tab:tabela2")
+print(tab1, type = "latex", table.placement = "H", comment=FALSE)
+
+
+result_Y <- data.frame(tenure = my.summary(data_ChurnY$tenure),
+                     MonthlyCharges = my.summary(data_ChurnY$MonthlyCharges),
+                     TotalCharges = my.summary(
+                     data_ChurnY$TotalCharges[
+                     !is.na(data_ChurnY$TotalCharges)]),
+                     row.names = c("min", "Q1", "median", "mean", "Q3", "max",
+                                   "var", "sd", "IQR"))
+
+tab1 <- xtable(result_Y, digits = 2, row.names = TRUE,
+               caption = "wybrane wskaźniki dla klientów, którzy odeszli",
+               label = "tab:tabela3")
+print(tab1, type = "latex", table.placement = "H", comment=FALSE)
+
+```
+
+Wykresy zmiennych ilościowych pogrupowane ze względu na to czy klient odszedł
+
+```{r, echo=TRUE, eval=TRUE}
+par(mfrow = c(1,2))
+ggplot(data, aes(x = MonthlyCharges)) + geom_boxplot() + facet_wrap(Churn)
+ggplot(data, aes(x = MonthlyCharges, fill = Churn)) + geom_histogram() 
+```
+
+```{r, echo=TRUE, eval=TRUE}
+par(mfrow = c(1,2))
+ggplot(data, aes(x = TotalCharges, fill = Churn)) + geom_histogram() 
+ggplot(data, aes(x = TotalCharges)) + geom_boxplot() + facet_wrap(Churn)
+```
+
+```{r, echo=TRUE, eval=TRUE}
+par(mfrow = c(1,2))
+ggplot(data, aes(x = tenure, fill = Churn)) + geom_histogram()
+ggplot(data, aes(x = tenure)) + geom_boxplot() + facet_wrap(Churn)
+```
+
+Wykresy rozrzutu dla zmiennych ciągłych w podziale na grupy
+
+```{r, echo=TRUE, eval=TRUE}
+ggplot(data, aes(x = MonthlyCharges, y = TotalCharges, colour = Churn)) +
+  geom_point(alpha = 0.5, size = 1) + geom_smooth(method = "lm")
+
+ggplot(data, aes(x = tenure, y = MonthlyCharges, colour = Churn)) +
+  geom_point(alpha = 0.5, size = 1) + geom_smooth(method = "lm")
+
+ggplot(data, aes(x = tenure, y = TotalCharges, colour = Churn)) +
+  geom_point(alpha = 0.5, size = 1) + geom_smooth(method = "lm")
+
+
+```
+
+
+Zmienne ilościowe w podziale na grupy
+
+```{r, echo=TRUE, eval=TRUE}
+
+
+for(i in 1:ncol(data)){
+  if(is.factor(data[[i]]) & colnames(data)[i] != "Churn"){
+    chart <- ggplot(data, aes(x = data[[i]], fill = Churn)) +
+      geom_bar(position = "dodge") + xlab(colnames(data)[i])
+    print(chart)
+  }
+}
+```
+
+Ze względu na to, że często odchodzą klienci korzystający z czeku elektronicznego. Interesujące mogą być relacje metody płatności, a innymi zmiennymi. Warto spojrzeć również na zależność między internetem a opłatą miesięczną
+
+
+
+
+```{r, echo=TRUE, eval=TRUE}
+ggplot(data, aes(x = InternetService, fill = PaymentMethod)) +
+      geom_bar(position = "dodge")
+
+ggplot(data, aes(x = MonthlyCharges, fill = InternetService)) + geom_histogram()
+
+ggplot(data, aes(x = InternetService, fill = Contract)) + geom_bar(position = "dodge")
+```
+
+## b.
+
+Spośród zmiennych jakościowych największe różnice znajdujemy w zmiennej "tenure", widoczne są zarówno na wykresach rozrzutu jak i histogramach, jednak można dostrzec takowe również przy "TotalCharges" oraz "MonthlyCharges". Pośród zmiennych ilościowych największe zróżnicowanie wykazują "InternetService", "OnlineSeciurity", "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies". W pewnym sensie interesująca jest tylko zmienna internet service, ponieważ różnice , które znajdują się w kolejnych są konsekwencją tego, czy klient ma wykupiony internet czy nie. Ponadto możemy dostrzec zależność od zmiennej "Churn" w "Dependents", "Contract", "PaperlessBilling" oraz "PaymentMethod".
+
+
+# Etap 4
+
+## a.
+
+Dane wymagały jedynie drobnej poprawki w przygotowaniu do analiz, braków było niewiele. Mamy 17 zmiennych ilościowych oraz 3 interesujące nas jakościowe, wszyskie z nich dają się łatwo interpretować. Część wykazuje asymetryczność rozkładów oraz znaczne różnice w podziale na grupy, zatem możemy próbować wyciągać z nich różne wnioski.
+
+
+## b.
+
+Większość klientów nie kwalifikuje się jako senior. Zazwyczaj mają osoby od siebie zależne. Ok. 90% korzysta z usług internetowych oraz ok. 80% z telefonicznych, zatem klienci często korzystają z obu jednocześnie. Zdecydowanie preferują kontrakty miesięczne. Do tej pory firma straciła jedną czwartą klientów. Ciekawą obeserwacją jest, że klienci z długim stażem mają tendencje do posiadania wyższych opłat miesięcznych.
+
+
+## c.
+
+Najbardzie rzucającym się w oczy czynnikiem, wpływającym na to czy klient pozostał w firmie jest rodzaj internetu, z którego korzysta. Możemy podejrzewać że niezadowolenie spowodowane jest głównie światłowodem. Zauważamy, że często odchodzą klienci, którzy mają wysokie opłaty miesięczne, rozliczają się czekiem elektronicznym oraz płacą za usługi co miesiąc, jednak jak widać na wykresach są to właśnie użytkownicy światłowodu.  Ponadto odchodzi wielu seniorów, jednak ci stanowią niewielki procent klienteli.
+
+Najważniejsze jest rozstrzygnięcie kwestii czterech skorelowanych ze sobą cech tj. światłowodu, miesięcznego okresu rozliczania, płatności czekiem elektronicznym oraz opłat miesięcznych. W pierwszej kolejności należy przyjrzeć się jakości i cenie internetu światłowodowego, który zdaje się być głównym powodem niezadowolenia.  Warto pomyśleć nad zniżkami i/lub udogonieniemi dla seniorów, jedak ze względu na ich niewielką liczbę nie jest to sprawa najwyższej wagi.
+

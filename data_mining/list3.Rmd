@@ -1,0 +1,763 @@
+---
+title: "Lista 3"
+subtitle: "Eksploracja danych"
+author: "Igor Misterowicz, 282245"
+date: "`r Sys.Date()`"
+header-includes:
+   - \usepackage[utf8]{inputenc}
+   - \usepackage{graphicx}
+   - \usepackage{float}
+output: 
+  pdf_document:
+    toc: true
+    fig_caption: yes
+    fig_width: 5 
+    fig_height: 4 
+    number_sections: true
+fontsize: 12pt 
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "", fig.align = "center")
+
+library(utils)
+library(xtable)
+library(ggplot2)
+library(e1071)
+library(arules)
+library(tidyr)
+library(factoextra)
+library(titanic)
+library(cluster)
+library(VIM)
+library(corrplot)
+library(class)
+library(rpart)
+library(rpart.plot)
+library(ipred)
+library(mlbench)
+
+set.seed(123)
+```
+
+
+
+# Zadanie 1
+
+## a.
+
+Klasyfikacja danych iris
+
+```{r, echo=TRUE, eval=TRUE}
+head(iris)
+```
+## b.
+
+Dzielę dane na zbiór uczący i testowy w proporcji 2:1.
+
+```{r, echo=TRUE, eval=TRUE}
+choices <- sample(1:nrow(iris),nrow(iris)*2/3)
+training <- iris[choices,]
+training <- training[order(training$Species),]
+test <- iris[-choices,]
+test <- test[order(test$Species),]
+nrow(training)
+nrow(test)
+
+```
+## c.
+
+Konstruuję klasyfikator.
+
+```{r, echo=TRUE, eval=TRUE}
+X <- cbind(rep(1,nrow(training)), training[,1:4])
+X <- as.matrix(X)
+
+Y <- matrix(0, nrow=nrow(training), ncol=3)
+
+num_labels <- as.numeric(training$Species)
+
+for (i in 1:3)  
+  Y[num_labels == i, i] <- 1
+
+B.hat <- solve(t(X)%*%X) %*% t(X) %*% Y
+Y.hat <- X%*%B.hat
+
+est_1 <- levels(training$Species)[apply(Y.hat, 1, FUN=function(x) which.max(x))]
+
+head(est_1)
+
+Z <- cbind(rep(1,nrow(test)), test[,1:4])
+Z <- as.matrix(Z)
+
+W <- matrix(0, nrow=nrow(test), ncol=3)
+
+num_labels <- as.numeric(test$Species)
+
+for (i in 1:3)  
+  W[num_labels == i, i] <- 1
+W.hat <- Z%*%B.hat
+
+est_2 <- levels(test$Species)[apply(W.hat, 1, FUN=function(x) which.max(x))]
+
+head(est_2)
+
+```
+Wizualizacja wyników na zbiorze uczącym. Pionowe linie przerywane tworzą przedziały dla prawdziwych klas. Po lewej mamy setosę, na środku versicolor, a na końcu virginicę.
+
+```{r, echo=TRUE, eval=TRUE}
+line_1 <- sum(training$Species == "setosa")
+line_2 <- line_1 + sum(training$Species == "versicolor")
+matplot(Y.hat, main="Prognozy na zbiorze uczącym",xlab="species", ylim=c(-.5,2),
+        ylab = "score", xaxt = "n")
+abline(v=c(line_1, line_2), lty=2, col="gray")
+legend(x="topright", legend=paste(1:3,levels(training$Species)), col=1:3,
+       text.col=1:3, bg="azure2")
+
+```
+
+Macierz pomyłek oraz skuteczność na zbiorze uczącym
+
+```{r, echo=TRUE, eval=TRUE}
+confusion_1 <- table(training$Species,est_1)
+
+qual_1 <- sum(diag(confusion_1))/nrow(training)
+
+confusion_1
+qual_1
+
+```
+
+Widzimy, że często nieprawidłowo klasyfikowana jest odmiana versicolor.
+
+Wizualizacja wyników na zbiorze testowym
+
+```{r, echo=TRUE, eval=TRUE}
+line_1 <- sum(test$Species == "setosa")
+line_2 <- line_1 + sum(test$Species == "versicolor")
+matplot(W.hat, main="Prognozy na zbiorze testowym",xlab="species",
+        ylim=c(-.5,2), ylab = "score", xaxt = "n")
+abline(v=c(line_1, line_2), lty=2, col="gray")
+legend(x="topright", legend=paste(1:3,levels(test$Species)), col=1:3,
+       text.col=1:3, bg="azure2")
+
+```
+
+## d.
+
+Macierz pomyłek oraz skuteczność na zbiorze testowym
+
+
+```{r, echo=TRUE, eval=TRUE}
+
+confusion_2 <- table(test$Species,est_2)
+
+qual_2 <- sum(diag(confusion_2))/nrow(test)
+
+confusion_2
+qual_2
+
+```
+
+Tutaj również widzimy problem z klasyfikacją odmiany versicolor, co sugeruje, że może zachodzić zjawisko maskowania tej klasy.
+
+## e.
+
+Tworzę nowy zbiór danych z dodatkowymi kolumnami.
+
+```{r, echo=TRUE, eval=TRUE}
+sqr_iris <- iris
+sqr_iris$sqr_PL <- iris$Petal.Length^2
+sqr_iris$sqr_PW <- iris$Petal.Width^2
+sqr_iris$sqr_SL <- iris$Sepal.Length^2
+sqr_iris$sqr_SW <- iris$Sepal.Width^2
+sqr_iris$PL_PW <- iris$Petal.Length*iris$Petal.Width
+sqr_iris$PL_SW <- iris$Petal.Length*iris$Sepal.Width
+sqr_iris$PL_SL <- iris$Petal.Length*iris$Sepal.Length
+sqr_iris$PW_SL <- iris$Petal.Width*iris$Sepal.Length
+sqr_iris$PW_SW <- iris$Petal.Width*iris$Sepal.Width
+sqr_iris$SL_SW <- iris$Sepal.Length*iris$Sepal.Width
+
+```
+Dzielę na podzbiór uczący i testowy.
+
+```{r, echo=TRUE, eval=TRUE}
+choices <- sample(1:nrow(sqr_iris),nrow(sqr_iris)*2/3)
+training <- sqr_iris[choices,]
+training <- training[order(training$Species),]
+test <- sqr_iris[-choices,]
+test <- test[order(test$Species),]
+nrow(training)
+nrow(test)
+```
+Konstruuję model.
+
+```{r, echo=TRUE, eval=TRUE}
+X <- cbind(rep(1,nrow(training)), training[,-5])
+X <- as.matrix(X)
+
+Y <- matrix(0, nrow=nrow(training), ncol=3)
+
+num_labels <- as.numeric(training$Species)
+
+for (i in 1:3)  
+  Y[num_labels == i, i] <- 1
+
+B.hat <- solve(t(X)%*%X) %*% t(X) %*% Y
+Y.hat <- X%*%B.hat
+
+est_1 <- levels(training$Species)[apply(Y.hat, 1, FUN=function(x) which.max(x))]
+
+head(est_1)
+
+Z <- cbind(rep(1,nrow(test)), test[,-5])
+Z <- as.matrix(Z)
+
+W <- matrix(0, nrow=nrow(test), ncol=3)
+
+num_labels <- as.numeric(test$Species)
+
+for (i in 1:3)  
+  W[num_labels == i, i] <- 1
+W.hat <- Z%*%B.hat
+
+est_2 <- levels(test$Species)[apply(W.hat, 1, FUN=function(x) which.max(x))]
+
+head(est_2)
+```
+Wizualizacja wyników na zbiorze uczącym
+
+```{r, echo=TRUE, eval=TRUE}
+line_1 <- sum(training$Species == "setosa")
+line_2 <- line_1 + sum(training$Species == "versicolor")
+matplot(Y.hat, main="Prognozy na rozszerzonym zbiorze uczącym",
+        xlab="species", ylim=c(-.5,2), ylab = "score", xaxt = "n")
+abline(v=c(line_1, line_2), lty=2, col="gray")
+legend(x="topright", legend=paste(1:3,levels(training$Species)), col=1:3,
+       text.col=1:3, bg="azure2")
+
+```
+
+Macierz pomyłek oraz skuteczność na zbiorze uczącym
+
+```{r, echo=TRUE, eval=TRUE}
+confusion_1 <- table(training$Species,est_1)
+
+qual_1 <- sum(diag(confusion_1))/nrow(training)
+
+confusion_1
+qual_1
+
+```
+
+Wyniki są niemal idealne.
+
+Wizualizacja wyników na zbiorze testowym.
+
+
+```{r, echo=TRUE, eval=TRUE}
+line_1 <- sum(test$Species == "setosa")
+line_2 <- line_1 + sum(test$Species == "versicolor")
+matplot(W.hat, main="Prognozy na rozszerzonym zbiorze testowym",
+        xlab="species", ylim=c(-.5,2), ylab = "score", xaxt = "n")
+abline(v=c(line_1, line_2), lty=2, col="gray")
+legend(x="topright", legend=paste(1:3,levels(test$Species)), col=1:3,
+       text.col=1:3, bg="azure2")
+
+```
+
+Macierz pomyłek oraz skuteczność na zbiorze testowym
+
+
+```{r, echo=TRUE, eval=TRUE}
+
+confusion_2 <- table(test$Species,est_2)
+
+qual_2 <- sum(diag(confusion_2))/nrow(test)
+
+confusion_2
+qual_2
+
+```
+Na zbiorze testowym klasyfikator zadziałał  prawie bezbłędnie, udało się wyeliminować zjawisko przysłaniania klas. Tak znaczące zwiększenie skuteczności modelu sugeruje, że między zmiennymi danych iris mamy nieliniowe zależności.
+
+# Zadanie 2
+
+## a.
+
+Wczytuję dane PimaIndiansDiabetes2.
+
+```{r, echo=TRUE, eval=TRUE}
+data("PimaIndiansDiabetes2")
+data <- PimaIndiansDiabetes2
+head(data)
+```
+
+Liczba cech
+
+```{r, echo=TRUE, eval=TRUE}
+ncol(data)
+```
+
+Liczba przypadków
+
+```{r, echo=TRUE, eval=TRUE}
+nrow(data)
+```
+
+Mamy dwie klasy tj. osoby z cukrzycą oraz bez. Ta informacja kodowana jest w zmiennej diabetes.
+
+Sprawdzam brakujące dane
+
+```{r, echo=TRUE, eval=TRUE}
+colSums(is.na(data))
+```
+
+Występują liczne brakujące dane kodowane za pomocą NA. Większość z nich znajduję się w zmiennych triceps i insulin.
+
+Sprawdzam typy zmiennych.
+
+```{r, echo=TRUE, eval=TRUE}
+str(data)
+```
+Typy zostały rozpoznane poprawnie.
+
+W celu przgotowania danych do analizy zastępuję brakujące wartości średnimi z odpowiednich kolumn.
+
+```{r, echo=TRUE, eval=TRUE}
+fill <- function(column){
+  mn <- sum(column[!is.na(column)])/ sum(!is.na(column))
+  mn <- round(mn,2)
+  sapply(column, FUN = function(x) ifelse(is.na(x),x <- mn,x <- x))
+}
+data[,1:8] <- lapply(data[,1:8], FUN = fill)
+
+head(data)
+```
+
+## b.
+
+W dalszej części porównam ze sobą algorytmy klasyfikacyjne:
+
+- k najbliższych sąsiadów
+- drzewo klasyfikacyjne
+- naiwny klasyfikatow bayesowski 
+
+## c.
+
+Badam rozkład klas
+
+```{r, echo=TRUE, eval=TRUE}
+table(data$diabetes)
+```
+
+Około 1/3 danych stanowią wyniki pozytywne, zatem przypisując wszystkim obserwacjom wynik negatywny będziemy mieli rację w 2/3 przypadków.
+
+Sprawdzam wariancję poszczególnych zmiennych.
+
+```{r, echo=TRUE, eval=TRUE}
+lapply(data[,1:8], FUN = function(x) sd(x)^2)
+```
+Widzimy duże różnice w wariancjach, co sugeruje konieczność standaryzacji. Największą zmienność obserwujemy w insulin.
+
+Przedstawiam graficznie zdolności grupujące poszczególnych zmiennych.
+
+```{r, echo=TRUE, eval=TRUE}
+x_ax = runif(nrow(data))
+
+ggplot(data,aes(x = x_ax, y = pregnant, colour = diabetes)) + 
+  geom_point() +xlab("")
+ggplot(data,aes(x = x_ax, y = glucose, colour = diabetes)) + 
+  geom_point() + xlab("")
+ggplot(data,aes(x = x_ax, y = pressure, colour = diabetes)) + 
+  geom_point() + xlab("")
+ggplot(data,aes(x = x_ax, y = triceps, colour = diabetes)) + 
+  geom_point() + xlab("")
+ggplot(data,aes(x = x_ax, y = insulin, colour = diabetes)) + 
+  geom_point() + xlab("")
+ggplot(data,aes(x = x_ax, y = mass, colour = diabetes)) + 
+  geom_point() + xlab("")
+ggplot(data,aes(x = x_ax, y = pedigree, colour = diabetes)) + 
+  geom_point() + xlab("")
+ggplot(data,aes(x = x_ax, y = age, colour = diabetes)) + 
+  geom_point() + xlab("")
+
+```
+
+Wykresy sugerują że zmiennymi o najlepszych zdolnościach klasyfikujących będą insulin oraz glucose, a zmienną o najgorszych będzie pressure.
+
+## d.
+
+Dzielę dane na podzbiór uczący i testowy
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+choices <- sample(1:nrow(data),nrow(data)*2/3)
+training <- data[choices,]
+test <- data[-choices,]
+nrow(training)
+nrow(test)
+```
+Zaczynam od algrorytmu KNN, w tym celu konieczna jest standaryzajcja. Używam wszystkich dostępnych cech oraz K = 5. 
+
+```{r, echo=TRUE, eval=TRUE}
+training_scaled <- training
+training_scaled[,1:8] <- as.data.frame(scale(training_scaled[,1:8]))
+
+test_scaled <- test
+test_scaled[,1:8] <- as.data.frame(scale(test_scaled[,1:8]))
+
+test_real <- test_scaled$diabetes
+training_real <- training_scaled$diabetes
+
+```
+
+Błąd na zbiorze testowym
+
+```{r, echo=TRUE, eval=TRUE}
+est <- knn(training_scaled[,1:8], test_scaled[,1:8],
+           training_scaled$diabetes, k=5)
+
+(result <- table(est,test_real))
+
+1 - (sum(diag(result))/ nrow(test_scaled))
+```
+
+Błąd na zbiorze uczącym
+
+```{r, echo=TRUE, eval=TRUE}
+est <- knn(training_scaled[,1:8], training_scaled[,1:8],
+           training_scaled$diabetes, k=5)
+
+(result <- table(est,training_real))
+
+1 - (sum(diag(result))/ nrow(training_scaled))
+```
+
+Następne jest drzewo decyzyjne. Tutaj również używam wszystkich dostępnych cech.
+
+```{r, echo=TRUE, eval=TRUE}
+model <- diabetes ~ .
+tree <- rpart(model, data = training)
+
+rpart.plot(tree)
+
+pred.labels.learning <- predict(tree, newdata=training, type = "class")
+pred.labels.test <- predict(tree, newdata=test, type = "class")
+
+n.learning <- nrow(training)
+n.test <- nrow(test)
+
+conf.mat.test <- table(pred.labels.test, test$diabetes)
+conf.mat.learning <- table(pred.labels.learning, training$diabetes)
+
+```
+
+Skuteczność na zbiorze testowym
+
+```{r, echo=TRUE, eval=TRUE}
+table(pred.labels.test, test$diabetes)
+1 - (sum(diag(conf.mat.test))/n.test)
+```
+Skuteczność na zbiorze uczącym
+
+```{r, echo=TRUE, eval=TRUE}
+table(pred.labels.learning, training$diabetes)
+1 - (sum(diag(conf.mat.learning))/n.learning)
+```
+
+Konstruuję naiwny klasyfikator bayesowski.
+
+```{r, echo=TRUE, eval=TRUE}
+model.NB <- naiveBayes(diabetes~., data = training)
+
+etykietki.prog.learn <- predict(model.NB, training) 
+etykietki.prog.test <- predict(model.NB, test)
+
+etykietki.rzecz.learn <- training$diabetes
+etykietki.rzecz.test <- test$diabetes
+
+blad.klasyf <- function(etykietki.prog, etykietki.rzecz)
+{
+  n <- length(etykietki.prog)
+  macierz.pomylek <- table(etykietki.prog,etykietki.rzecz)
+  list(macierz.pomylek=macierz.pomylek,
+       jakosc.klasyf=1-(sum(diag(macierz.pomylek)) / n))
+}
+
+
+```
+
+Sprawdzam skuteczność dla zbioru testowego
+
+```{r, echo=TRUE, eval=TRUE}
+(blad.klasyf(etykietki.prog.test, etykietki.rzecz.test))
+
+```
+
+Sprawdzam skuteczność dla zbioru uczącego
+ 
+```{r, echo=TRUE, eval=TRUE}
+(blad.klasyf(etykietki.prog.learn, etykietki.rzecz.learn))
+
+```
+Testuję teraz skuteczność tych algorytmów, ale stosując bardziej zaawansowane metody walidacji.
+
+Cross validation oraz bootstrap dla KNN.
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+my.predict  <- function(model, newdata){
+  predict(model, newdata=newdata, type="class")
+} 
+my.ipredknn <- function(formula1, data1, ile.sasiadow){
+  ipredknn(formula=formula1,data=data1,k=ile.sasiadow)
+} 
+
+scaled_data <- data
+scaled_data[,1:8] <- as.data.frame(scale(data[,1:8]))
+
+errorest(diabetes ~., scaled_data, model=my.ipredknn, predict=my.predict,
+         estimator="cv",     
+         est.para=control.errorest(k = 10), ile.sasiadow=5)
+
+errorest(diabetes ~., scaled_data, model=my.ipredknn, predict=my.predict,
+         estimator="boot",   
+         est.para=control.errorest(nboot = 50), ile.sasiadow=5)
+```
+
+Cross validation oraz bootstrap dla drzewa decyzyjnego.
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+my.predict  <- function(model, newdata){
+  predict(model, newdata=newdata, type="class")
+} 
+
+my.rpart <- function(formula1, data1) {
+  rpart(formula = formula1, data = data1)
+}
+
+errorest(diabetes ~ ., data = data, model = my.rpart, predict = my.predict,
+         estimator = "cv", est.para = control.errorest(k = 10))
+
+errorest(diabetes ~ ., data = data, model = my.rpart, predict = my.predict,
+         estimator = "boot", est.para = control.errorest(nboot = 50))
+```
+
+
+Cross validation oraz bootstrap dla naiwnego bayesa.
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+my.predict  <- function(model, newdata){
+  predict(model, newdata=newdata, type="class")
+} 
+
+my.NB <- function(formula1, data1) {
+  model.NB <- naiveBayes(formula1, data = data1)
+}
+
+
+errorest(diabetes ~ ., data = data, model = my.NB, predict = my.predict,
+         estimator = "cv", est.para = control.errorest(k = 10))
+
+errorest(diabetes ~ ., data = data, model = my.NB, predict = my.predict,
+         estimator = "boot", est.para = control.errorest(nboot = 50))
+```
+- Metoda bootstrap surowiej oceniła algorytmy KNN oraz drzewa decyzycjnego, za to zwróciła niewiele korzystniejszy wynik niż cross validation przy metodzie naiwnego bayesa.
+- KNN na zbiorze testowym został oceniony lepiej niż przy metodach bootstrap oraz cross validation.
+- Drzewo decyzyjne na zbiorze uczącym zostało ocenione podobnie jak przy metodzie bootstrap, jednak cross validation zwróciło nieznacznie lepszy wynik.
+- W przypadku naiwnego bayesa wyniki wszystkich trzech metod są podobne.
+
+
+
+## e. 
+
+Dla uproszczenia będę używał jedynie schematu testowania cross validation. Sprawdzam teraz skuteczność modeli na różnych podzbiorach dostępnych cech.
+
+Model KNN
+
+Najpierw wyrzucam triceps oraz pegigree.
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age ,
+         scaled_data, model=my.ipredknn, predict=my.predict, estimator="cv",     
+         est.para=control.errorest(k = 10), ile.sasiadow=5)
+```
+
+
+Teraz zostawiam jedynie glucose, insulin oraz age.
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+errorest(diabetes ~ glucose + insulin + age, scaled_data, model=my.ipredknn, predict=my.predict, estimator="cv",     
+         est.para=control.errorest(k = 10), ile.sasiadow=5)
+```
+
+Model drzewa decyzyjnego
+
+Wyrzucam ze zbioru cech triceps i pegigree.
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age,
+         data = data, model = my.rpart, predict = my.predict,
+         estimator = "cv", est.para = control.errorest(k = 10))
+
+```
+
+Zostawiam jedynie glucose, insulin oraz age.
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+errorest(diabetes ~ glucose + insulin + age, scaled_data, model=my.rpart,
+         predict=my.predict, estimator="cv",     
+         est.para=control.errorest(k = 10))
+```
+
+Model naiwny bayes
+
+Wyrzucam ze zbioru cech triceps oraz pegigree.
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age,
+         data = data, model = my.NB, predict = my.predict,
+         estimator = "cv", est.para = control.errorest(k = 10))
+
+```
+
+Zostawiam jedynie glucose insulin oraz age.
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+errorest(diabetes ~ glucose + insulin + age, scaled_data, model=my.NB,
+         predict=my.predict, estimator="cv",     
+         est.para=control.errorest(k = 10))
+```
+
+We wszystkich przypadkach otrzymaliśmy lepsze wyniki wyrzucając zmienne triceps oraz pedigree. Są one nieznacznie gorsze jeśli ograniczyć się tylko do insulin, glucose oraz age. Dla modelu naiwny bayes zmiany były nieznaczne.
+
+
+Testuję teraz różne parametry modeli na zbiorze cech, który dawał najlepsze wyniki tj. wszystkie oprócz triceps i pedigree.
+
+Model KNN
+
+3 sąsiadów
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age,
+         scaled_data, model=my.ipredknn, predict=my.predict, estimator="cv",     
+         est.para=control.errorest(k = 10), ile.sasiadow=3)
+```
+
+15 sąsiadów
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age,
+         scaled_data, model=my.ipredknn, predict=my.predict, estimator="cv",     
+         est.para=control.errorest(k = 10), ile.sasiadow=15)
+```
+
+
+50 sąsiadów
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age,
+         scaled_data, model=my.ipredknn, predict=my.predict, estimator="cv",     
+         est.para=control.errorest(k = 10), ile.sasiadow=50)
+```
+Model drzewa decyzyjnego
+
+Wariant z parametrami "gini"
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+my.rpart <- function(formula1, data1) {
+  rpart(formula = formula1, data = data1, parms = list(split = "gini"))
+}
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age,
+         data = data, model = my.rpart, predict = my.predict,
+         estimator = "cv", est.para = control.errorest(k = 10))
+
+```
+Wariant z parametrem "information"
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+my.rpart <- function(formula1, data1) {
+  rpart(formula = formula1, data = data1, parms = list(split = "information"))
+}
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age,
+         data = data, model = my.rpart, predict = my.predict,
+         estimator = "cv", est.para = control.errorest(k = 10))
+
+```
+Sprawdzam różne arguenty dla zmiennej "control"
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+my.rpart <- function(formula1, data1) {
+  rpart(formula = formula1, data = data1, control = rpart.control(minsplit = 3, maxdepth = 10, minbucket = 3))
+}
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age,
+         data = data, model = my.rpart, predict = my.predict,
+         estimator = "cv", est.para = control.errorest(k = 10))
+
+```
+
+Model naiwnego bayesa
+
+Sprawdzam parametry "laplace", "usekernel" oraz "adjust"
+
+```{r, echo=TRUE, eval=TRUE}
+set.seed(123)
+
+my.NB <- function(formula1, data1) {
+  model.NB <- naiveBayes(formula1, data = data1, laplace = 1, usekernel = TRUE,
+                         adjust = 0.5)
+}
+
+errorest(diabetes ~ pregnant + glucose + pressure + insulin + mass + age,
+         data = data, model = my.NB, predict = my.predict,
+         estimator = "cv", est.para = control.errorest(k = 10))
+
+```
+
+## f.
+
+
+- Sterując dostępnymi parametrami otrzymywałem wyniki gorsze lub jedynie nieznacznie lepsze np. w przypadku drzewa decyzyjnego.
+
+- Pośród testowanych przeze mnie podzbiorów cech najlepszy jest taki, który składa się z wszystkich poza triceps oraz pedigree. Może to być spowodowane dużą liczbą brakujących danych w zmiennej triceps.
+
+- Największą skuteczność miał algorytm KNN na powyższym podzbiorze cech. Rozsądną alternatywą wyadaje się również naiwny klasyfikator bayesowski, ponieważ dobrze sobie radził nawet z bardzo małą liczbą zmiennych. Dzięki pójściu na taki kompriomis mielibyśmy bardziej przejrzysty model.
+
+- Przy metodach testowania skuteczności, największą rozbieżność udało się uzyskać przy algorytmie KNN, który wg. metody bootstrap miał błąd ok. 28.8%, a przy podziale na podzbiór uczący i testowy otrzymaliśmy błąd 23.8%. Ogólnie trudno zauważyć jakąś tendencję jeśli chodzi o metody testowania skuteczności.
+
+
+
+
