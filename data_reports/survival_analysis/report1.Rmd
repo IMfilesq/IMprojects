@@ -1,0 +1,457 @@
+---
+title: "**Sprawozdanie 1**"
+author: "**Marta Hałas i Igor Misterowicz**"
+date: "**2025-11-08**"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    toc: true
+    toc_depth: 3
+  word_document:  
+    toc: true
+    number_sections: true
+  html_document:
+    toc: true
+    df_print: paged
+    number_sections: true
+lang: pl
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "", fig.align = "center")
+```
+
+```{r wyniki,echo=FALSE, warning=FALSE,eval=TRUE,message=FALSE,}
+library(knitr)
+library(kableExtra)
+library(binom)
+set.seed(123)
+library(ggplot2)
+library(cowplot)
+library(latex2exp)
+library(dplyr)
+library(tidyr)
+```
+
+\newpage
+# Lista 1
+
+## Zadanie 1
+
+Poniższe implementacje funkcji związanych z rozkładem wykładniczym-Weilbula  $\mathcal{E}\,\mathcal{W}\left(\alpha,\,\beta, \,\gamma\right)$ przyjmują jako argumenty parametry $\alpha,\,\beta, \,\gamma$, a zwracają funkcję jednej zmiennej $x$.
+
+### Dystrybuanta
+
+$$F(x)=\left[1-e^{-(x/\beta)^{\alpha}}\right]^{1/\gamma}$$
+
+
+```{r }
+pwexp <- function(alpha, beta, gamma){
+  f <- function(x){
+    return ((1 - exp(-(x/beta)^alpha))^gamma)
+  }
+  return(f)
+}
+
+
+```
+
+### Gęstość 
+
+$$
+f(x)=\left(\frac{\gamma\alpha}{\beta}\right)\left(\frac{x}{\beta}\right)^{\alpha-1}\left[1-e^{-(x/\beta)^{\alpha}}\right]^{\gamma-1}e^{-(x/\beta)^{\alpha}}
+$$
+
+
+
+
+```{r }
+dwexp <- function(alpha, beta, gamma){
+  f <- function(x){
+    return ((gamma*alpha/beta)*((x/beta)^(alpha - 1))*
+              ((1 - exp(-(x/beta)^(alpha)))^(gamma-1))*exp(-(x/beta)^alpha))
+  }
+  return(f)
+}
+
+
+```
+
+### Funkcja Kwantylowa 
+
+$$
+Q(x) = \beta \left[\ln\left(\frac{1}{1 - x^{1/\gamma}}\right)\right]^{1/\alpha}
+$$
+
+
+```{r }
+qwexp <- function(alpha, beta, gamma){
+  f <- function(x){
+    return (beta*(-log(1-x^(1/gamma)))^(1/alpha))
+  }
+  return(f)
+}
+
+
+```
+
+
+### Funkcja Hazardu 
+
+$$
+h(x)=\frac{f(x)}{1-F(x)}
+$$
+
+
+```{r }
+
+hwexp <- function(alpha, beta, gamma){
+  den <- dwexp(alpha, beta, gamma)
+  dist <-  pwexp(alpha, beta, gamma)
+  f <- function(x){
+    return (den(x)/(1 - dist(x)))
+  }
+  return(f)
+}
+
+
+```
+
+
+```{r, echo = FALSE}
+alpha = 0.5
+beta = 0.5
+gamma = 0.5
+
+df = data.frame("F(0.5)" = pwexp(alpha, beta, gamma)(0.5),
+                "Q(0.5)" = qwexp(alpha, beta, gamma)(0.5),
+                "f(0.5)" = dwexp(alpha, beta, gamma)(0.5),
+                "h(0.5)" = hwexp(alpha, beta, gamma)(0.5),
+                check.names = FALSE)
+
+df = round(df,3)
+
+kable(df, caption = "Przykładowe wartości funkcji \\label{tab:wyniki}")
+
+
+```
+
+W Tabeli \ref{tab:wyniki} zostały umieszczone wartości zaimplementowanych funkcji dla $x=\alpha=\beta=\gamma=0.5$.
+
+
+
+## Zadanie 2
+
+Na Wykresie \ref{fig:hazard} znajdują się funkcje hazardu o różnych, sprecyzowanych na legendzie, parametrach. Użycie aż trzech parametrów zapewnia nam umiwersalność. Dzięki temu możemy opisywać zbiory danych o różnych charakterystykach czasów życia.
+
+```{r , fig.cap = "Wykresy funkcji hazardu \\label{fig:hazard}", echo = FALSE}
+x_ax <- seq(0.01, 5, length.out = 100)
+
+params <- c(
+  TeX("$\\alpha=0.5,\\;\\beta=0.5,\\;\\gamma=0.5$"),
+  TeX("$\\alpha=3,\\;\\beta=2,\\;\\gamma=0.5$"),
+  TeX("$\\alpha=2,\\;\\beta=2,\\;\\gamma=2$")
+)
+
+points <- data.frame("a" = sapply(x_ax,FUN = hwexp(0.5,0.5,0.5)),
+                     "b" = sapply(x_ax,FUN = hwexp(3,2,0.5)),
+                     "c" = sapply(x_ax,FUN = hwexp(2,2,2)))
+
+points_long <- points %>%
+  mutate(x = x_ax) %>%
+  pivot_longer(cols = a:c, names_to = "dist", values_to = "value")
+
+params <- c(
+  a = TeX("$\\alpha=0.5, \\beta=0.5, \\gamma=0.5$"),
+  b = TeX("$\\alpha=3, \\beta=2, \\gamma=0.5$"),
+  c = TeX("$\\alpha=2, \\beta=2, \\gamma=2$")
+)
+
+ggplot(points_long, aes(x = x, y = value, color = dist)) +
+  geom_line(size = 1) +
+  scale_color_manual(values = c(a="deeppink", b="blue", c="black"),
+                     labels = params) +
+  labs(color = "Parametry rozkładu") +
+  ylab("y") + 
+  xlab("x") + 
+  ggtitle("Funkcje hazardu rozkładu wykładniczego-weilbula") +
+  ylim(0, 5)
+
+```
+
+## Zadanie 3
+
+Poniższa funkcja zwraca wektor $n$ realizacji zmienej losowej o rozkładzie $\mathcal{E}\,\mathcal{W}\left(\alpha,\,\beta, \,\gamma\right)$. Jej parametry to $n,\,\alpha,\,\beta,\,\gamma$.
+
+```{r }
+
+rwexp <- function(n, alpha, beta, gamma){
+  unifx <- runif(n,0,1)
+  values <- sapply(unifx, FUN = qwexp(alpha, beta, gamma))
+  return(values)
+}
+
+```
+
+Przykład: Wywołanie funkcji **rwexp** dla $n=5,\,\alpha=1,\,\beta=2,\,\gamma=3$
+
+```{r }
+rwexp(5,1,2,3)
+```
+
+## Zadanie 4
+
+Na Wykresie \ref{fig:hist}, dla danych o rozkłdzie wykładniczym-weilbula, znajdziemy porównanie histogramów z teoretycznymi gęstościami. Wybrane parametry oraz liczby obserwacji zostały opisane w legendzie. Jeśli dane interpretować jak0 czasy życia (w latach), to dla $\alpha=0.95,\;\beta=0.95,\;\gamma=0.95$ z upływem czasu obserwujemy malejącą liczbę zgonów, natomiast dla  $\alpha=2,\;\beta=2,\;\gamma=2$ największa śmiertelność jest w okolicach końca 2 roku.
+
+```{r , fig.width=6, fig.height=7, fig.cap="\\label{fig:hist} Dystrybuanty i histogramy Rozkładu Wykładniczego-Weilbula", echo = FALSE, fig.align='left'}
+
+
+Y = data.frame(y1 = rwexp(50,0.95,0.95,0.95),
+               y2 = rwexp(100,0.95,0.95,0.95),
+               y3 = rwexp(50,2,2,2),
+               y4 = rwexp(100,2,2,2))
+
+x_ax = seq(0.02, 8, length.out = 100)
+
+
+p1 <- ggplot(data = NULL, aes(x = Y$y1)) +
+  geom_histogram(aes(y = ..density..), bins = 40, fill = "blue",
+                 color = "black") +
+  geom_line(size = 1, aes(x = x_ax, y = sapply(x_ax, FUN = dwexp(0.95,0.95,0.95))))+
+  xlab("x") +
+  ylab("y") + 
+  ggtitle(TeX("$\\alpha=0.95,\\;\\beta=0.95,\\;\\gamma=0.95,\\;n=50$")) +
+  xlim(c(0,5)) 
+  
+
+p2 <- ggplot(data = NULL, aes(x = Y$y2)) +
+  geom_histogram(aes(y = ..density..), bins = 40, fill = "blue",
+                 color = "black") +
+  geom_line(size = 1, aes(x = x_ax, y = sapply(x_ax,FUN = dwexp(0.95,0.95,0.95)))) +
+  xlab("x") +
+  ylab("y") + 
+  ggtitle(TeX("$\\alpha=0.95,\\;\\beta=0.95,\\;\\gamma=0.95,\\;n=100$")) + 
+  xlim(c(0,5))
+
+
+p3 <- ggplot(data = NULL, aes(x = Y$y3)) +
+  geom_histogram(aes(y = ..density..), bins = 40, fill = "blue",
+                 color = "black") +
+  geom_line(size = 1, aes(x = x_ax, y = sapply(x_ax,FUN = dwexp(2,2,2)))) +
+  xlab("x") +
+  ylab("y") + 
+  ggtitle(TeX("$\\alpha=2,\\;\\beta=2,\\;\\gamma=2,\\;n=50$"))
+
+p4 <- ggplot(data = NULL, aes(x = Y$y4)) +
+  geom_histogram(aes(y = ..density..), bins = 40, fill = "blue",
+                 color = "black") +
+  geom_line(size = 1, aes(x = x_ax, y = sapply(x_ax,FUN = dwexp(2,2,2)))) +
+  xlab("x") +
+  ylab("y") + 
+  ggtitle(TeX("$\\alpha=2,\\;\\beta=2,\\;\\gamma=2,\\;n=100$"))
+
+title <- ggdraw() +
+  draw_label("Dystrybuanty i histogramy rozkładu wykładniczego-Weilbula",
+             x = 0.5,
+             hjust = 0.5,
+             size = 14)
+
+
+grid <- plot_grid(p1, p2, p3, p4, labels = NULL)
+
+plot_grid(title, grid, ncol = 1, rel_heights = c(0.1, 1))
+
+
+```
+
+## Zadanie 5
+
+W Tabeli \ref{tab:des} znajdziemy statystyki opisowe dla danych z zadania 4. "True" w nazwie kolumny oznacza, że wartość została obliczona za pomocą teoretycznej funkcji kwantylowej. Zaskakującą obserwacją dla $\alpha=0.95,\;\beta=0.95,\;\gamma=0.95$ jest to, że dla $n=50$ mamy większy rozstęp niż dla $n=100$. Zgodnie z intuicją, dla $n=100$ kwantyle z próby są bliższe kwantylom teoretycznym niż dla $n=50$.
+
+```{r, echo = FALSE }
+Q1 = qwexp(0.95,0.95,0.95)
+Q2 = qwexp(2,2,2)
+
+set1 <- summary(Y$y1)
+set1["Rng"] = max(Y$y1) - min(Y$y1)
+set1["Sd"] = sd(Y$y1)
+set1["True Med"] = Q1(0.5)
+set1["True 1.Qu"] = Q1(0.25)
+set1["True 3.Qu"] = Q1(0.75)
+
+set2 <- summary(Y$y2)
+set2["Rng"] = max(Y$y2) - min(Y$y2)
+set2["Sd"] = sd(Y$y2)
+set2["True Median"] = Q1(0.5)
+set2["True 1.Qu"] = Q1(0.25)
+set2["True 3.Qu"] = Q1(0.75)
+
+set3 <- summary(Y$y3)
+set3["Rng"] = max(Y$y3) - min(Y$y3)
+set3["Sd"] = sd(Y$y3)
+set3["True Median"] = Q2(0.5)
+set3["True 1.Qu"] = Q2(0.25)
+set3["True 3.Qu"] = Q2(0.75)
+
+set4 <- summary(Y$y4)
+set4["Rng"] = max(Y$y4) - min(Y$y4)
+set4["Sd"] = sd(Y$y4)
+set4["True Median"] = Q2(0.5)
+set4["True 1.Qu"] = Q2(0.25)
+set4["True 3.Qu"] = Q2(0.75)
+
+des_stats <- rbind(set1,set2,set3,set4)
+des_stats <- as.data.frame(des_stats)
+rownames(des_stats) <- c(
+  "$n = 50,\\ \\mathcal{E}\\,\\mathcal{W}(0.5,0.5,0.5)$",
+  "$n = 100,\\ \\mathcal{E}\\,\\mathcal{W(0.5,0.5,0.5)}$",
+  "$n = 50,\\ \\mathcal{E}\\,\\mathcal{W}(2,2,2)$",
+  "$n = 100,\\ \\mathcal{E}\\,\\mathcal{W}(2,2,2)$"
+)
+colnames(des_stats)[3] = "Med"
+des_stats[2:11] = round(des_stats[2:11],2)
+des_stats[1] = round(des_stats[1],5)
+
+kable(des_stats, caption = "\\label{tab:des} Statystyki opisowe dla danych wykładniczych", escape = FALSE, booktabs = TRUE)
+```
+
+
+# Lista 4
+
+## Zadanie 1
+
+Umieszczyony poniżej kod zwraca p-value dla wykładniczych danych cenzurowanych I typu. Funkcja przyjmuje jako argumenty $\theta_0,\,r,\,t_0,\,s,\,n$ oraz $type$, gdzie:
+
+- $r$ to liczba danych kompletnych
+- $t_0$ to czas, po którym zakończyliśmy eksperyment
+- $s$ to statystyka $\sum_{i=1}^{r}x_i$, gdzie $x_i$ to dane kompletne
+- $n$ to liczba danych 
+- $type$ podajemy w zależności od typu hipotezy:
+  - $"two.sided"$ - $\theta=\theta_0$ przeciwko $\theta\neq\theta_0$
+  - $"left"$ - $\theta\le\theta_0$ przeciwko $\theta>\theta_0$
+  - $"right"$ - $\theta\ge\theta_0$ przeciwko $\theta<\theta_0$
+ 
+Test oparty jest na ilorazie wiarygodności $\lambda(\mathbf{x}) = \frac{sup_{\theta\in\Theta_0}L(\theta,\mathbf{x})}{sup_{\theta\in\Theta}L(\theta,\mathbf{x})}$. Korzystamy z faktu, że $-2ln(\lambda(\mathbf{X}))$ ma rozkład $\chi^2(1)$. W naszym przypadku $L(\theta,\mathbf{x})=\frac{n!}{(n-r)!}\theta^re^{-\theta(s + t_0(n-r))}$ przyjmuje maxium dla $\theta = \frac{r}{s+t_0(n-r)}$.
+
+```{r}
+pval = function(theta0, r ,t0 , s, n, type){
+  if(r == 0){
+    return(1)
+  }
+  s = s + t0*(n-r)
+  lambda = (theta0*s/r)^r*exp(-theta0*s + r)
+  K = 1 - pchisq(-2*log(lambda),1)
+  if(type == "two.sided"){
+    return(K)
+  }
+  if(type == "left"){
+    if(theta0 > r/s){
+      return(1)
+    }
+    else{
+      return(K)
+    }
+  }
+  if(type == "right"){
+    if(theta0 < r/s){
+      return(1)
+    }
+    else{
+      return(K)
+    }
+  }
+
+}
+```
+
+## Zadanie 2
+
+Poniższa funkcja szacuje za pomocą symulacji moc lub rozmiar testu $\theta=\theta_0$ przeciwko $\theta\neq\theta_0$ dla wykładniczych danych cenzurowanych I typu. Przyjmuje jako argumenty $\theta,\,\theta_0,\,t_0,\,n,\,nsim,\,\alpha$, przy konwencji z zadania 1, gdzie:
+
+- $nsim$ to liczba symulacji
+- $\alpha$ to poziom istotności testu
+- $theta$ jest parametrem rozkładu danych, które generujemy na porzeby testu
+
+```{r}
+sim = function(theta,theta0, t0,  n, nsim, alpha){
+  failed = 0
+  for(i in 1:nsim){
+    data = sort(rexp(n, theta))
+    r = sum(data <= t0)
+    s = sum(data[1:r])
+    p = pval(theta0, r ,t0 , s, n, type = "two.sided")
+    if(p < alpha){
+      failed = failed + 1
+    }
+  }
+  return(failed/nsim)
+  
+}
+
+
+```
+
+W tabelach \ref{tab:sim1} oraz \ref{tab:sim2} znajdziemy wyniki funkcji **sim** dla różnych $\theta$ przy $\theta_0=0.5,\,t_0=0.7,\,nsim=1000,\,\alpha=0.05$.
+Wartość $\theta=\theta_0=0.5$ jest oszacowaniem rozmiaru, natomiast pozostałe 10 wartości $\theta\neq\theta_0=0.5$ mocami testu.
+Zgodnie z przewidywaniami dla $\theta=\theta_0$ otrzymujemy rozmiar bliski poziomowi istotności $\alpha=0.05$.
+
+```{r echo = FALSE}
+thetas = seq(0.25 ,2.75, 0.25)
+pvals = sapply(thetas, FUN = function(x) sim(x,0.5, 0.7,20,1000,0.05))
+
+df = data.frame(rbind(thetas,pvals))
+row.names(df) =  row.names = c("$\\theta$","$\\beta_{\\theta}$")
+
+kable(df, caption = "\\label{tab:sim1} Symulacyjnie wyznaczona istotność testu dla n = 20",col.names = NULL)
+
+pvals2 = sapply(thetas, FUN = function(x) sim(x,0.5, 0.7,50,1000,0.05))
+
+df2 = data.frame(rbind(thetas,pvals2))
+row.names(df2) =  row.names = c("$\\theta$","$\\beta_{\\theta}$")
+
+kable(df2, caption = "\\label{tab:sim2} Symulacyjnie wyznaczona istotność testu dla n = 50",col.names = NULL)
+
+
+
+A = c(0.03345514, 0.08656403, 0.08799947, 0.24385821, 0.27755032,
+        0.40787247, 0.58825664, 0.64125620, 0.90679161, 0.94222208)
+
+B = c( 0.03788958, 0.12207257, 0.20319983, 0.24474299, 0.30492413,
+         0.34224462, 0.42950144, 0.44484582, 0.63805066, 0.69119721)
+
+s1 = sum(A[1:10])
+s2 = sum(B[1:10])
+
+```
+## Zadanie 3
+
+Przeprowadzamy, na podstawie danych z zadania 3 z listy 2, test hipotezy $\theta=1$ przeciwko $\theta\neq1$ na poziomie istotności $\alpha=0.05$. W naszym przypadku:
+
+- $t_0=1$
+- $n=20$
+- $r=10$
+- $s_A= `r s1`$
+- $s_B= `r s2`$
+
+W Tabeli \ref{tab:test} widoczne są p-wartości dla poszczególnych zbiorów danych oraz rozstrzygnięcie testu. W przypadku obu zbiorów ich charakterystyka nie pozwala na odrzucenie hipotezy $\theta=1$.
+
+```{r, echo = FALSE}
+
+
+
+df = data.frame("A" = c(round(pval(1,10,1,s1,20,"two.sided"),2),
+                             "nieodrzucona"),
+                "B" = c(round(pval(1,10,1,s2,20,"two.sided"),2),
+                        "nieodrzucona"))
+
+rownames(df) = c("p-value", "rozstrzygnięcie")
+
+kable(df, caption = "\\label{tab:test} Testy na zbiorach A i B")
+
+```
+
+
+
+

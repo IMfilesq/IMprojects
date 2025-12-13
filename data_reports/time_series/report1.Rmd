@@ -1,0 +1,346 @@
+---
+title: "**Sprawozdanie 1**"
+author: "**Igor Misterowicz**"
+date: "**2025-11-08**"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    toc: true
+    toc_depth: 3
+  word_document:  
+    toc: true
+    number_sections: true
+  html_document:
+    toc: true
+    df_print: paged
+    number_sections: true
+lang: pl
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "", fig.align = "center")
+
+set.seed(123)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(cowplot)
+library(latex2exp)
+library(dplyr)
+library(tidyr)
+library(TSAFBook)
+library(lattice)
+library(forecast)
+library(gridExtra)
+library(tseries)
+```
+
+\newpage
+
+# Zadanie 3
+
+
+## Implementacje generatorów szeregów czasowych
+
+Biały szum, rozkład jednostajny $\mathcal{U}(-1,1)$
+
+
+```{r}
+
+wnu = function(n) runif(n,min = -1, max  = 1)
+
+```
+
+
+Biały szum, rozkład wykładniczy $\mathcal{E}(1)$
+
+
+```{r}
+
+wne = function(n) rexp(n, 1) 
+
+```
+
+
+Błądzenie losowe, rozkład $\mathcal{U}(-1,1)$
+
+
+```{r}
+
+rw = function(n){
+  temp = wnu(n)
+  result = numeric(n)
+  for(i in 1:n){
+    result[i] = sum(temp[1:i])
+  }
+  return(result)
+}
+
+```
+
+Szereg $AR(1)$, gdzie $X_0 = 0, \,X_i = 0.5X_{i-1} + \varepsilon_i$, przy czym $\varepsilon_i\sim\mathcal{U}(-1,1)$
+
+
+```{r}
+
+ma = function(n){
+  temp = wnu(n)
+  result = numeric(n)
+  result[1] = 0
+  for(i in 2:n){
+    result[i] = 0.5*temp[i-1] + temp[i]
+  }
+  return(result)
+}
+
+```
+
+Biały szum, o rozkładzie $\mathcal{U}(-1,1)$, z nałożonym trendem $f(x)=x$
+
+```{r}
+
+wnt = function(n){
+  result = wnu(n)
+  for(i in 1:n){
+    result[i] = result[i] + i
+  }
+  return(result)
+}
+
+```
+
+
+
+## Implementacje testów
+
+Będziemy korzystać z konwencji, w której testy zwracają "TRUE", jeśli odrzucają hipotezę o białoszumowości oraz, w przeciwnym przypadku, "FALSE". Używamy standardowego poziomu istotności $\alpha = 0.05$.
+
+### Test graficzny
+
+
+```{r }
+
+gtest <- function(data, h.max, alpha = 0.05, chart = FALSE){
+  #tworzę zmienne pomocnicze oraz pusty wektor na kowariancje
+  n = length(data)
+  cov = numeric(h.max)
+  mu = mean(data)
+  
+  #zapełniam wektor na kowariancje
+  for(lag in 1:(h.max)){
+    c = (1/n)*sum((data[(lag+1):n] - mu)*(data[1:(n-lag)] - mu))
+    cov[lag] = c
+  }
+  
+  #tworzę wektor z kowariancjami
+  cov0 = (1/n)*sum((data-mu)^2)
+  corr = cov/cov0
+  
+  #obliczam długość przedziału
+  interval = qnorm(1- alpha/2)/sqrt(n)
+  
+  #sprawdzam werdykt testu
+  between = sum(abs(corr) > interval)/h.max
+  result = ifelse(between <= alpha, FALSE, TRUE)
+  
+  #zwracam wynik testu i ewentualny wykres
+  if(chart == TRUE){
+    plot = ggplot(data = NULL, aes(x = 1:length(corr), y = corr)) +
+      geom_col(fill = "blue", colour = "black") +
+      geom_hline(yintercept = interval, linetype = "dashed") + 
+      geom_hline(yintercept = -interval, linetype = "dashed") + 
+      xlab("lag") + 
+      ylab("correlation")
+    return(list("plot" = plot,
+                "result" = result))
+  }
+  else{
+      return(list("plot" = NA,
+              "result" = result))
+  }
+}
+
+
+```
+
+### Przykłady użycia testu graficznego
+
+Na wykresie \ref{fig:gtest} znajdziemy przykłady użycia graficznych testów białoszumowości, a w tabeli \ref{tab:gtest} werdykt, który sygnalizuje czy $\mathcal{H}_0$ (hipoteza o białoszumowości) została odrzucona. Liczba danych to $n=100$, a krok $h.max=25$. Widzimy, że test graficzny zwracał spodziewany werdykt dla wygenerowanych danych. Z wykresu \ref{fig:gtest} odczytujemy, że:
+
+- Dla białego szumu mamy niskie oraz losowe wartości korelacji
+- Dla błądzenia losowego oraz białego szumu z trendem, dla małych kroków, widzimy wysokie wartości korelacji, które jednak maleją wzraz ze wzrostem kroku
+- Dla autoregresji zauważamy znaczącą korelację jedynie dla kroku $lag = 1$
+
+```{r, echo = FALSE, fig.cap = "\\label{fig:gtest} Przykład użycia graficznych testów białoszumowości"}
+title <- ggdraw() +
+  draw_label("Graficzne testy białoszumowości",
+             x = 0.5,
+             hjust = 0.5,
+             size = 14)
+
+p1 = gtest(wnu(100),25,chart = TRUE)
+p2 = gtest(rw(100),25,chart = TRUE)
+p3 = gtest(ma(100),25,chart = TRUE)
+p4 = gtest(wnt(100),25,chart = TRUE)
+
+grid <- plot_grid(p1$plot + 
+                    ggtitle("Biały szum"),
+                  p2$plot + 
+                    ggtitle("Błądzenie losowe"),
+                  p3$plot + 
+                    ggtitle("Autoregresja"),
+                  p4$plot +
+                    ggtitle("Biały szum z trendem"),
+                  labels = NULL)
+
+plot_grid(title, grid, ncol = 1, rel_heights = c(0.1, 1))
+
+df = data.frame(p1$result,
+                p2$result,
+                p3$result,
+                p4$result)
+
+colnames(df) = c("Biały szum $\\mathcal{U}(-1,1)$",
+                  "Błądzenie losowe $\\mathcal{U}(-1,1)$",
+                  "Autoregresja $AR(1)$",
+                  "Biały szum $\\mathcal{U}(-1,1)$ z trendem")
+rownames(df) = c("Odrzucamy $\\mathcal{H}_0$")
+kable(df,
+      caption = "\\label{tab:gtest} Wyniki graficznego testu białoszumowości",
+      escape = FALSE,
+      booktabs = TRUE)
+```
+
+
+
+### Test formalny
+
+```{r }
+
+formal = function(data, lag, alpha = 0.05){
+  #obliczam statystykę
+  b_stat = Box.test(data, lag, type = "Ljung-Box")$statistic
+  
+  #obliczam przedział
+  interval = qchisq(1 - alpha,df = lag)
+  
+  #zwracam werdykt
+  if(b_stat <= interval){
+  return(FALSE)
+  }
+  else{
+    return(TRUE)
+  }
+}
+
+```
+
+### Przykład użycia testu formalnego
+
+```{r}
+formal(runif(100,-1,1),25)
+```
+
+W tym przypadku test formalny prawidłowo rozpoznał brak podstaw do odrzucenia hipotezy o białoszumowości.
+
+## Symulacje
+
+
+### Implementacja symulacji
+
+```{r }
+
+sim = function(data_gen, n, h.max, alpha = 0.05, nsim = 1000){
+  # tworzę wektory na werdykt testu
+  g = numeric(nsim)
+  f = numeric(nsim)
+  
+  # zapełniam wektory  
+  for(i in 1:nsim){
+    data = data_gen(n)
+    g[i] = gtest(data, h.max, alpha)$result
+    f[i] = formal(data, h.max, alpha)
+  }
+  #zwracam wyniki symulacji
+  return(list("g" = mean(g), "f" = mean(f)))
+}
+
+```
+
+
+### Wyniki symulacji
+
+W tabelach \ref{tab:simg} oraz \ref{tab:simf} znadziemy wyniki symulacji dokładności testu, odpowiednio, graficznego oraz formalnego. Wynik liczbowy jest prawdopodobieństwem odrzucenia hipotezy o białoszumowości. Użyty został poziom istotności $\alpha=0.05$. 
+
+```{r, echo = FALSE}
+dfg = data.frame(h.max = c(25,75,5),
+                n = c(100,100,20),
+                wnu = c(sim(wnu, h.max = 25, n = 100)$g,
+                        sim(wnu, h.max = 75, n = 100)$g,
+                        sim(wnu, h.max = 5, n = 20)$g),
+                wne = c(sim(wne, h.max = 25, n = 100)$g,
+                        sim(wne, h.max = 75, n = 100)$g,
+                        sim(wne, h.max = 5, n = 20)$g),
+                rw = c(sim(rw, h.max = 25, n = 100)$g,
+                        sim(rw, h.max = 75, n = 100)$g,
+                        sim(rw, h.max = 5, n = 20)$g),
+                ma = c(sim(ma, h.max = 25, n = 100)$g,
+                        sim(ma, h.max = 75, n = 100)$g,
+                        sim(ma, h.max = 5, n = 20)$g),
+                wnt = c(sim(wnt, h.max = 25, n = 100)$g,
+                        sim(wnt, h.max = 75, n = 100)$g,
+                        sim(wnt, h.max = 5, n = 20)$g))
+
+dff = data.frame(h.max = c(25,75,5),
+                n = c(100,100,20),
+                wnu = c(sim(wnu, h.max = 25, n = 100)$f,
+                        sim(wnu, h.max = 75, n = 100)$f,
+                        sim(wnu, h.max = 5, n = 20)$f),
+                wne = c(sim(wne, h.max = 25, n = 100)$f,
+                        sim(wne, h.max = 75, n = 100)$f,
+                        sim(wne, h.max = 5, n = 20)$f),
+                rw = c(sim(rw, h.max = 25, n = 100)$f,
+                        sim(rw, h.max = 75, n = 100)$f,
+                        sim(rw, h.max = 5, n = 20)$f),
+                ma = c(sim(ma, h.max = 25, n = 100)$f,
+                        sim(ma, h.max = 75, n = 100)$f,
+                        sim(ma, h.max = 5, n = 20)$f),
+                wnt = c(sim(wnt, h.max = 25, n = 100)$f,
+                        sim(wnt, h.max = 75, n = 100)$f,
+                        sim(wnt, h.max = 5, n = 20)$f))
+
+rn = c("$h.max=25,n=100$",
+       "$h.max=75,n=100$",
+       "$h.max=5,n=20$")
+
+cn = c("Krok - $h.max$",
+       "Długość szeregu - $n$",
+       "Biały szum $\\mathcal{U}(-1,1)$",
+       "Biały szum $\\mathcal{E}(1)$",
+       "Błądzenie losowe $\\mathcal{U}(-1,1)$",
+       "Autoregresja $AR(1)$",
+       "Biały szum $\\mathcal{U}(-1,1)$ z trendem")
+
+colnames(dfg) = cn
+colnames(dff) = cn
+
+kable(dfg,
+      caption = "\\label{tab:simg} Symulacja: graficzny test białoszumowości",        escape = FALSE,
+      booktabs = TRUE)
+
+kable(dff,
+      caption = "\\label{tab:simf} Symulacja: formalny test białoszumowości",         escape = FALSE,
+      booktabs = TRUE)
+
+
+```
+
+- Dane w tabelach \ref{tab:simg} oraz \ref{tab:simf} nie pozwalają nam na    jednoznaczne wskazanie lepszego testu. 
+- W szczególnym przypadku $h.max=75$, $n=100$, test graficzny niesłusznie odrzuca hipotezę o białoszumowości rzadziej niż test formalny. 
+- Użycie zalecanej proporcji $\frac{h.max}{n}=0.25$ skutkowało obniżeniem błędu I rodzaju tylko w przypadku testu formalnego, przy teście graficznym obserwujemy efekt odwrotny.
+- W przypadku $n=100$ test graficzny miał większe błędy II rodzaju niż test formalny. Dla $n=25$ obserwujemy efekt odwrotny.
+- W przypadku obu testów wystąpiły błędy I rodzaju większe niż spodziewane $\alpha=0.05$
+- Oba testy miały miały wysokie błędy II rodzaju dla szeregu $AR(1)$. Jest to spowodowane tym, że dla danych $AR(1)$ wyraźna korelacja występuje jedynie dla $h = 1$. Efekt ten jest widoczny na wykresie \ref{fig:gtest}.
+

@@ -1,0 +1,671 @@
+---
+title: "**Sprawozdanie 2**"
+author: "**Marta Hałas i Igor Misterowicz**"
+date: "**2025-11-08**"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    toc: true
+    toc_depth: 3
+  word_document:  
+    toc: true
+    number_sections: true
+  html_document:
+    toc: true
+    df_print: paged
+    number_sections: true
+lang: pl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "", fig.align = "center")
+
+set.seed(123)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(cowplot)
+library(latex2exp)
+library(dplyr)
+library(tidyr)
+
+
+```
+
+# Lista 5
+
+## Zadanie 1
+
+### Implementacja estymatora Kaplana-Meiera
+
+Estymator jest postaci:
+
+$$
+\widehat{S}(t) = \prod_{i:t_{(i)}\le t}(1 - \frac{d_i}{r_i})
+$$
+, gdzie 
+
+$$
+r_i = \sum_{j=1}^n \mathbf{1}_{[t_i, \infty)}(t_j)
+$$
+
+$$
+d_i = \sum_{j=1}^n \mathbf{1}_{\{t_{(i)}\}}(t_j) \, \mathbf{1}_{\{ 1\}}(\delta_i)
+$$
+
+Jako argumenty przyjmujemy wektory czastów $t_i$ oraz indykatorów kompletności $\delta_i$.
+
+```{r}
+km = function(t, delta){
+  n = length(t)
+  times = sort(unique(t))
+  r = sapply(times, FUN = function(var) sum(t >= var))
+  d = sapply(times, FUN = function(var) sum(t == var & delta == 1)) 
+  conditionals = 1 - d/r
+  S = function(x){
+    S_x = prod(conditionals[times <= x])
+    return(S_x)
+  }
+  return(S)
+}
+
+
+```
+
+### Implementacja estymatora Fleminga-Harringtona
+
+Estymator jest postaci
+
+$$
+\widehat{S}(t) = \exp(-{\sum_{i:t_{(i)}\le t}\frac{d_i}{r_i}})
+$$ , gdzie $d_i$, $r_i$ oraz argumenty funkcji są takie jak dla estymatora Kaplana-Meiera.
+
+```{r}
+fh = function(t, delta){
+  n = length(t)
+  times = sort(unique(t))
+  r = sapply(times, FUN = function(var) sum(t >= var))
+  d = sapply(times, FUN = function(var) sum(t == var & delta == 1))  
+  S = function(x){
+    S_x = exp(-sum((d/r)[times <= x]))
+    return(S_x)
+  }
+  return(S)
+}
+```
+
+### a) Wykres estymatora Kaplana-Meiera
+
+Na wykresie \ref{fig:km} znajdziemy funkcje przeżycia zwrócone przez estymator Kaplana-Meiera dla zbiorów danych A i B.
+
+```{r, echo = FALSE, fig.cap = "\\label{fig:km} Funkcje przeżycia wyrażone estymatorem Kaplana-Meiera"}
+A = c(0.03345514, 0.08656403, 0.08799947, 0.24385821, 0.27755032,
+      0.40787247, 0.58825664, 0.64125620, 0.90679161, 0.94222208)
+
+B = c( 0.03788958, 0.12207257, 0.20319983, 0.24474299, 0.30492413,
+       0.34224462, 0.42950144, 0.44484582, 0.63805066, 0.69119721)
+
+SA = km(c(A,rep(1,10)),c(rep(1,10),rep(0,10)))
+SB = km(c(B,rep(1,10)),c(rep(1,10),rep(0,10)))
+
+x_ax = seq(from = 0, to  = 1, by = 0.01)
+
+y_axA = sapply(x_ax, SA)
+y_axB = sapply(x_ax, SB)
+
+ggplot(NULL, aes(x = x_ax)) +
+  geom_line(aes(y = y_axA, color = "A"), linewidth = 1) +
+  geom_line(aes(y = y_axB, color = "B"), linewidth = 1) +
+  scale_color_manual(values = c("A" = "red",
+                                "B" = "blue")) +
+  labs(color = "Zbiór danych") + 
+  xlab("t") + 
+  ylab("S(t)") + 
+  ggtitle("Funkcje przeżycia wyrażone estymatorem Kaplana-Meiera")
+
+```
+
+### b) Wykres estymatora Fleminga-Harringtona
+
+Na wykresie \ref{fig:fh} znajdziemy wykresy funkcji przeżycia zwróconych przez estymator Fleminga-Harringtona dla zbiorów danych A i B.
+
+```{r, echo = FALSE, fig.cap = "\\label{fig:fh}Funkcje przeżycia wyrażone estymatorem Fleminga-Harringtona"}
+A = c(0.03345514, 0.08656403, 0.08799947, 0.24385821, 0.27755032,
+      0.40787247, 0.58825664, 0.64125620, 0.90679161, 0.94222208)
+
+B = c( 0.03788958, 0.12207257, 0.20319983, 0.24474299, 0.30492413,
+       0.34224462, 0.42950144, 0.44484582, 0.63805066, 0.69119721)
+
+SA = fh(c(A,rep(1,10)),c(rep(1,10),rep(0,10)))
+SB = fh(c(B,rep(1,10)),c(rep(1,10),rep(0,10)))
+
+x_ax = seq(from = 0, to  = 1, by = 0.01)
+
+y_axA = sapply(x_ax, SA)
+y_axB = sapply(x_ax, SB)
+
+ggplot(NULL, aes(x = x_ax)) +
+  geom_line(aes(y = y_axA, color = "A"), linewidth = 1) +
+  geom_line(aes(y = y_axB, color = "B"), linewidth = 1) +
+  scale_color_manual(values = c("A" = "red",
+                                "B" = "blue")) +
+  labs(color = "Zbiór danych") + 
+  xlab("t") + 
+  ylab("S(t)") + 
+  ggtitle("Funkcje przeżycia wyrażone estymatorem Fleminga-Harringtona")
+
+```
+
+Użycie różnych estymatorów nie wpływa na wnioski dotyczące działania leków A i B. Zauważamy, że dla $t \leq 0.2$ częściej zdrowieją pacjęci, którzy przyjmują lek A, natomiast dla $0.4 \leq t \leq 0.9$ mamy więcej ozdrowień dla leku B. W tabeli \ref{tab:comparison}, widzimy dokładne wartości obu estymatorów dla leku A.
+
+```{r, echo=FALSE}
+SAfh = fh(c(A,rep(1,10)),c(rep(1,10),rep(0,10)))
+SAkm = km(c(A,rep(1,10)),c(rep(1,10),rep(0,10)))
+
+
+df = as.data.frame(rbind(sapply(unique(A), FUN = SAkm),
+      sapply(unique(A), FUN = SAfh)))
+
+df = round(df,3)
+
+colnames(df) = sapply(round(unique(A),3), FUN = function(x) paste0("S(",x,")"))
+
+rownames(df) = c("Fleming-Harringtion", "Kaplan-Meier")
+
+
+kable(df, caption = "\\label{tab:comparison} Porówanie wyników estymatora Kaplana-Meiera oraz Fleminga-Harringtona dla czasów do wyzrowień, przyjmując lek A")
+
+
+```
+
+## Zadanie 2
+
+### Implementacja ogona
+
+Implementowany ogon Browna, Hollanda i Kowara jest postaci
+
+$$
+\widehat{S}(t) = \exp\left[\frac{\ln\widehat{S}(t^+)}{t^+}t\right]
+$$
+, gdzie $t^+ = t_{(n)}$. Argumentami funkcji implementowanych w tym zadaniu są już wcześniej używane wektory obserwowanych czasów życia $t_i$ oraz indykatorów kompletności $\delta_i$.
+
+```{r}
+km_bhk_tail = function(t, delta){
+  n = length(t)
+  S = km(t, delta)
+  t_plus = t[n]
+  S_tail = function(x){
+    S_x = exp(log(S(t_plus))/t_plus*x)
+    return(S_x)
+  }
+  return(S_tail)
+}
+
+```
+
+### Implementacja estymatora Kaplana-Meiera z ogonem
+
+```{r}
+
+km_extended = function(t, delta){
+  n = length(t)
+  t_plus = t[n]
+  base = km(t, delta)
+  tail = km_bhk_tail(t,delta)  
+  S = function(x){
+    if(x <= t_plus) return(base(x))
+    if(x > t_plus) return(tail(x))
+  }
+  return(S)
+}
+
+
+```
+
+### Implementacja wykresu estymatora Kaplana-Meiera z ogonem
+
+```{r}
+
+plot_km_extended= function(t, delta){
+  S = km_extended(t, delta)
+  x_ax = seq(from = 0, to = 5, by = 0.01)
+  y_ax = sapply(x_ax, FUN = S)
+  p = ggplot(data = NULL, aes(x = x_ax, y = y_ax)) + 
+        geom_line(colour = "Blue", linewidth = 1) + 
+        xlab("t") + 
+        ylab("S(t)")
+  return(p)
+}
+
+
+```
+
+### Wykresy estymatorów Kaplana-Meiera z ogonem dla zbiorów A i B
+
+```{r, echo = FALSE, fig.cap = "\\label{fig:kmt} Wykresy estymatorów Kaplana-Meiera z ogonem dla leków A i B"}
+tA = c(A, rep(1,10))
+tB = c(B, rep(1,10))
+delta = c(rep(1,10),rep(0,10))
+
+
+p1 = plot_km_extended(tA, delta) + ggtitle("Zbiór A")
+p2 = plot_km_extended(tB, delta) + ggtitle("Zbiór B")
+
+p = plot_grid(p1, p2)
+
+title <- ggdraw() +
+  draw_label(
+    "Wykresy estymatorów Kaplana-Meiera z ogonem dla leków A i B",
+    fontface = "bold",
+    x = 0.5, 
+    hjust = 0.5,
+  )
+
+
+plot_grid(title,p, ncol = 1,rel_heights = c(0.1, 1))
+
+```
+
+Na wykresie \ref{fig:kmt} znajdują się funkcje przeżycia zwrócone przez estymator Kaplana-Mayera z ogonem dla czasów do wyzdrowień przy terapiach lekami A i B. Ponieważ oba zbiory danych mają takie same $t^+$, ogony są identyczne.
+
+## Zadanie 3
+
+### Implementacja funkcji kwantylowej uogólnionego rozkładu wykładniczego
+
+$$
+Q(x) = -\frac{1}{\lambda} \ln ( 1 - x^{1/\alpha})
+$$
+
+```{r}
+Qexp_g = function(lambda, alpha){
+  f <- function(x){
+    return(-1/lambda*log((1-x^(1/alpha))))
+  }
+  return(f)
+}
+
+```
+
+### Implementacja symulacji
+
+Funkcja przyjmuje jako argumenty:
+
+-   $t_0$ - czas cenzurowania
+-   $\lambda,\alpha$ - parametry uogólnionego rozkładu wykładniczego
+-   $n$ - wielkość próby
+-   $t\_val$ - czas w którym obliczamy wartość $\widehat{S}$
+-   $nsim$ - liczba symulacji
+
+```{r}
+
+
+sim = function(t0, lambda, alpha, n, t_val, nsim = 5000){
+  result = numeric(nsim)
+  for(i in 1:nsim){
+    Q = Qexp_g(lambda, alpha)
+    data =  sort(Q(runif(n)))
+    delta = (data <= t0)
+    data[data > t0] = t0
+    result[i] = km_extended(data, delta)(t_val)
+  }
+  return(result)
+}
+
+
+```
+
+### Oszacowanie średniej ogólnionego rozkładu wykładniczego dla $\alpha = \lambda = 0.5$
+
+```{r}
+Q = Qexp_g(0.5, 0.5)
+round(mean(Q(runif(100000))),2)
+```
+
+### Wyniki symulacji
+
+Używamy domyślnej liczby symulacji 5000. Na wykresie \ref{fig:simkm} widoczne są histogramy wartości estymatora Kaplana-Meiera z ogonem w punktach $t_0$ oraz $2t_0$, dla parametrów uogólnionego rozkładu wykładniczego $\alpha = \lambda = 0.5$ oraz $t_0 = 1.22$. Zauważamy, że wraz ze wzrostem $n$, otrzymany rozkład staje się coraz bardziej symetryczny, ponadto obserwujemy szybko zanikające ogony. Te obserwacje są charakterystyczne dla rozkładu normalnego. Z drugiej strony widzimy nietypowy, odstającye słupeki dla $n=100$, $S(t_0)$. Możemy podejrzewać, że estymator Kaplana-Meiera z ogonem jest asymptotycznie normalny w punkcie $2t_0$, ale dla $t_0$ trudno o rozstrzygnięcie.
+
+```{r, echo = FALSE, fig.cap = "\\label{fig:simkm} Histogramy oszacowań funkcji przeżycia dla uogólnionego rozkładu wyładniczego, $\\alpha = \\lambda = 0.5$, $t_0 = 1.22$", fig.height=8}
+
+simulate = data.frame(sim(1.22, 0.5, 0.5, 30, 1.22),
+                      sim(1.22, 0.5, 0.5, 50, 1.22),
+                      sim(1.22, 0.5, 0.5, 100, 1.22),
+                      sim(1.22, 0.5, 0.5, 30, 2.44),
+                      sim(1.22, 0.5, 0.5, 50, 2.44),
+                      sim(1.22, 0.5, 0.5, 100, 2.44))
+
+titles = c(TeX("$n=30$"),
+           TeX("$n=50$"),
+           TeX("$n=100$"),
+           TeX("$n=30$"),
+           TeX("$n=50$"),
+           TeX("$n=100$"))
+
+x_labs = c(TeX("$S(t_0)$"),
+           TeX("$S(t_0)$"),
+           TeX("$S(t_0)$"),
+           TeX("$S(2t_0)$"),
+           TeX("$S(2t_0)$"),
+           TeX("$S(2t_0)$"))
+
+
+
+p <- vector("list", 6)
+
+for(i in 1:6){
+  df = data.frame(x = simulate[, i])
+  p[[i]] = ggplot(df, aes(x = x)) +
+    geom_histogram(aes(y = ..density..),fill = "blue", colour = "black") + 
+    xlab(x_labs[i]) + 
+    ylab("gęstość") + 
+    ggtitle(titles[i])
+}
+
+
+
+grid = plot_grid(plotlist = p, ncol = 2)
+
+title <- ggdraw() +
+  draw_label(
+    TeX("Histogramy oszacowań funkcji przeżycia, $\\alpha = \\lambda = 0.5$, $t_0 = 1.22$"),
+    fontface = "bold",
+    x = 0.5, 
+    hjust = 0.5,
+  )
+
+
+print(plot_grid(title,grid, ncol = 1, rel_heights = c(0.1, 1)))
+
+```
+
+# Lista 7
+
+## Zadanie 1
+
+Używamy notacji z 1 zadania z listy 5. Funkcja przyjmuje jako argumenty: wektory $t$, $\delta$, wartości $\tau$, $\alpha$ oraz $tail$ gdzie:
+
+-   $\tau$ - wartość maksymalnego, znanego apriori, czasu życia
+-   $\alpha$ - oznacza poziom istotności
+-   $tail$ - wartość logiczna, wskazuje czy używamy estymatora z ogonem 
+
+Zwracane realizacje przedziałów ufności są postaci:
+
+$$
+T_L = \hat{\mu}_{\tau} - z(1 - \alpha/2) \sqrt{\hat{V}(\hat{\mu}_{\tau})} $$
+
+$$
+T_U = \hat{\mu}_{\tau} + z(1 - \alpha/2) \sqrt{\hat{V}(\hat{\mu}_{\tau})} 
+$$
+$$
+\hat{V}(\hat{\mu}_{\tau}) = \sum_{i=1}^D \hat{\mu}_{\tau}^2 \frac{d_i}{r_i(r_i - d_i)} 
+$$
+$$
+\hat{\mu}_{\tau} = \int_{s_i}^{\tau}\widehat{S}(t)dt
+$$
+
+, gdzie:
+
+-   $z$ - funkcja kwantylową rozkładu $\mathcal{N}(0,1)$
+-   $D$ - liczba nieocenzurowanych czasów życia
+-   $s_i$ - uporządkowane dane nieocenzurowane
+
+
+```{r}
+
+est_int = function(t, delta, tau, alpha, tail = FALSE){
+  if(tail == FALSE){
+    S = Vectorize(km(t, delta))
+  }
+  else{
+    S = Vectorize(km_extended(t, delta))
+  }
+  
+  mu = integrate(S, 0, tau, subdivisions = 10000)$value
+  
+  times = sort(unique(t))
+  r = sapply(times, FUN = function(var) sum(t >= var))
+  d = sapply(times, FUN = function(var) sum(t == var & delta == 1)) 
+  
+  s = t[delta == 1]  
+  event_times = sort(unique(s))
+  D = length(event_times)
+  event_idx = match(event_times, times)
+  
+  V = 0
+  for(i in 1:D){
+    j = event_idx[i]
+    integral = integrate(S, event_times[i], tau, subdivisions = 10000)$value
+    V = V + integral^2 * d[j]/(r[j]*(r[j] - d[j]))
+  }
+  
+  lower = mu - qnorm(1 - alpha/2) * sqrt(V)
+  upper = mu + qnorm(1 - alpha/2) * sqrt(V)
+  
+  result = c(round(lower, 2),round(upper,2))
+  
+  return(result)
+}
+
+
+```
+
+## Zadanie 2
+
+W tabeli \ref{tab:rcsint}, znajdują się rezalizacje przedziałów ufności dla średniego czasu do progresju raka jajnika, na poziomie ufności 0.95. Użyty został estymator bez ogona. Ze wzgędu na podobne wartości maksymalne 1206 oraz 1119, wartości $\tau$ równe 1250 oraz 1500 możemy uznać za rozsądne dla obu zbiorów danych. Przy niskim stopniu zaawansowania choroby mamy dużo szersze realizacje przedziałów. Zauważamy, że wybór odpowiedniego $\tau$ jest kluczowy, ponieważ dobranie złej wartości może skutować znaczącym błędem. Jak należałoby sie spodziewać, granice realizacji przedziałów są znacznie wyższe w przypadku pacjentów z niskim stopniem zaawansowania choroby.
+
+```{r, echo = FALSE}
+data1 = c(28, 89, 175, 195, 309, 377, 393, 421, 447,
+462, 709, 744, 770, 1106, 1206)
+
+delta1 = c(1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0) 
+
+data2 = c(34, 88, 137, 199, 280, 291, 299, 300, 309,
+351, 358, 369, 369, 370, 375, 382, 392, 429, 451, 1119)
+
+delta2 = c(1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0)
+
+a = est_int(data1, delta1, 1500, 0.05)
+b = est_int(data2, delta2, 1500, 0.05)
+c = est_int(data1, delta1, 1250, 0.05)
+d = est_int(data2, delta2, 1250, 0.05)
+
+df = data.frame(c(paste0("[",a[1],", ", a[2],"]"),
+                  paste0("[",b[1],", ", b[2],"]")),
+                c(paste0("[",c[1],", ", c[2],"]"),
+                  paste0("[",d[1],", ", d[2],"]")))
+
+colnames(df) = c("$\\tau = 1500$", "$\\tau = 1250$")
+rownames(df) = c("Niski stopień zaawansowania","Wysoki stopień zaawansowania")
+
+kable(df, caption = "\\label{tab:rcsint} Realizacje przedziałów ufności dla czasów do progresji raka jajnika")
+
+```
+
+# Lista dodatkowa
+
+## Zadanie 1
+
+Korzystam z wcześniej zaimplementowanych funkcji związanych z uogólnionym rozkładem wykładniczym. Są to funkcja kwantylowa, dystrybuanta oraz generator danych cenzurowanych losowo.
+
+```{r}
+
+kwantylowa<- function(u,a,l) {
+  (-1/l)*log(1-u^(1/a))
+}
+
+losowo<-function(T1,n,a,l){
+  u<-runif(n)
+  wartosc<-kwantylowa(u,a,l)
+  cenzurowane<-runif(n,min=0,max=T1)
+  pary<-pmin(wartosc,cenzurowane)
+  indykator <- as.integer(wartosc<=cenzurowane)
+  data.frame("czas obserwowania" = pary, indykator = indykator)
+}
+
+dystrybuanta <- function(x, a, lambda) {
+  ifelse(x < 0, 0, (1 - exp(-lambda * x))^a)
+}
+
+```
+Funkcja $s\_int()$ oblicza realizacje asymptotycznych punktowych przedziałów ufności dla estymatora Kaplana-Meiera w punkcie $t_0$. Ponadto przyjmuje wektory danych $t_i$, indykatorów kompletności $\delta_i$ oraz poziom istotności $\alpha$. Zwracane są realizacje trzech różnych wariantów przedziałów: liniowy, po transformacjach $\ln(x)$ oraz $\ln(\frac{x}{1-x})$. Przedziały są postaci:
+
+dla $f(x) = x$:
+
+$$
+\widehat{S}_n(t_0) \pm z(1 - \alpha/2)\sqrt{\hat\sigma_n}
+$$
+dla $f(x) = \ln(x)$:
+
+$$
+\widehat{S}_n(t_0)^{\exp( \pm z(1 - \alpha/2)\sqrt{\hat\sigma_n}/|\ln(\widehat{S}_n(t_0))|)}
+$$
+
+dla $f(x) = \ln(\frac{x}{1-x})$:
+
+$$
+\frac{\widehat{S}_n(t_0)}{\widehat{S}_n(t_0) + (1-\widehat{S}_n(t_0))\exp( \pm z(1 - \alpha/2)\frac{\sqrt{\hat\sigma_n}}{1-\widehat{S}_n(t_0)})}
+$$
+
+, gdzie
+
+$$
+\hat\sigma_n = \widehat{S}^2_n(t_0)\sum_{i:t_i \le t_0} \frac{d_i}{r_i(r_i-d_i)}
+$$
+
+
+
+
+```{r}
+s_int = function(t, delta, t0, alpha){
+  S = km(t,delta)
+  
+  times = sort(unique(t))
+  r = sapply(times, FUN = function(var) sum(t >= var))
+  d = sapply(times, FUN = function(var) sum(t == var & delta == 1))
+  
+  v = sum((d/(r*(r - d)))[times <= t0])
+
+  sigma = S(t0)^2*v
+
+  lower_plain = S(t0) - qnorm(1 - alpha/2) * sqrt(sigma)
+  upper_plain = S(t0) + qnorm(1 - alpha/2) * sqrt(sigma)
+  
+  lower_log = S(t0)^exp(qnorm(1 - alpha/2)*sqrt(v)/abs(log(S(t0))))
+  upper_log = S(t0)^exp(-qnorm(1 - alpha/2)*sqrt(v)/abs(log(S(t0))))
+  
+  lower_logit = S(t0)/(S(t0) + (1 - S(t0))*exp(qnorm(1 - alpha/2)*sqrt(v)/((1-S(t0)))))
+  upper_logit = S(t0)/(S(t0) + (1 - S(t0))*exp(-qnorm(1 - alpha/2)*sqrt(v)/((1-S(t0)))))
+  
+  plain_result = c(round(lower_plain, 2),round(upper_plain,2))
+  log_result = c(round(lower_log, 2),round(upper_log,2))
+  logit_result = c(round(lower_logit, 2),round(upper_logit,2))
+  
+  lst = list(plain = plain_result,
+             log = log_result,
+             logit = logit_result)
+  
+  return(lst)
+}
+
+```
+
+Funkcja $int\_sim()$ przyjmuje dodatkowo argumenty $n\_data$, który oznacza liczbę danych, oraz $n\_sim$, który określa liczbę powtórzeń w symulacji. Dla realizacji przedziałów ufności z funkcji $s\_int()$ zwracane są symulacjyjnie wyznaczone prawdopodobieństwa pokrycia oraz średnie długości przedziałów. Dane generowane są z rozkładu $\mathcal{G}\mathcal{E}(0.5, 0.5)$.
+
+```{r}
+
+int_sim = function(t0, alpha, n_data, n_sim = 5000){
+  plain_count = 0
+  plain_len = 0
+  log_count = 0
+  log_len = 0
+  logit_count = 0
+  logit_len = 0
+  
+  for(i in 1:n_sim){
+    data = losowo(2, n_data, 0.5, 0.5)
+    
+    t = data$czas.obserwowania
+    delta = data$indykator
+    
+    if(all(delta == 1)) print("all_1")
+    if(all(delta == 0)) print("all_0")
+    
+    interval = s_int(t, delta, t0, alpha)$plain
+    
+    lower = interval[1]
+    upper = interval[2]
+    
+    S = 1 - dystrybuanta(t0, 0.5, 0.5)
+    plain_len = plain_len + (upper - lower)
+    if(lower <= S & upper >= S) {
+       plain_count = plain_count + 1 
+    }
+    
+    interval = s_int(t, delta, t0, alpha)$log
+    
+    lower = interval[1]
+    upper = interval[2]
+    
+    log_len = log_len + (upper - lower)
+    if(lower <= S & upper >= S) {
+      log_count = log_count + 1 
+    }
+    
+    interval = s_int(t, delta, t0, alpha)$logit
+    
+    lower = interval[1]
+    upper = interval[2]
+    
+    logit_len = logit_len + (upper - lower)
+    if(lower <= S & upper >= S) {
+      logit_count = logit_count + 1 
+    }
+  }
+  
+  lst = list(plain = round(c(plain_count/n_sim, plain_len/n_sim),3),
+             log = round(c(log_count/n_sim, log_len/n_sim),3),
+             logit = round(c(logit_count/n_sim, logit_len/n_sim),3))
+  
+  return(lst)
+
+}
+
+```
+
+W tabelach \ref{tab:psim1} - \ref{tab:psim6} umieszczone zotały symulacyjnie wyznaczone pokrycia oraz średnie długości realizacji asymptotycznych punktowych przedziałów ufności dla estymatora Kaplana-Meiera. Użyty został poziom istotności $\alpha=0.05$ oraz liczba symulaci $n\_sim= 5000$. Korzystam z konwencji w której przekształcenie $f(x) = x$ nazywamy plain, $f(x) = \ln(x)$ log, a $f(x) = \ln(\frac{x}{1-x})$ logit. Zgodnie z intuicją, wraz ze wzrostem $n$, długości realizacji przedziałów stają się krótsze. Najgorzej wypada nam przedział ufności liniowy "plain", ponieważ często otrzymujemy pokrycie niższe niż spodziewane 0.95. Nie obserwujemy przy tym wyraźnego skrócenia średniej długości przedziału.
+
+```{r, echo = FALSE}
+result = int_sim(0.2, 0.05, 30)
+df = as.data.frame(result)
+rownames(df) = c("pokrycie", "długość")
+kable(df, caption = "\\label{tab:psim1} Symulacyjnie wyznaczone pokrycia i długości punktowych przedziałów ufności estymatora Kaplana-Meiera dla S(0.2) i n = 30")
+
+result = int_sim(0.2, 0.05, 50)
+df = as.data.frame(result)
+rownames(df) = c("pokrycie", "długość")
+kable(df, caption = "\\label{tab:psim2} Symulacyjnie wyznaczone pokrycia i długości punktowych przedziałów ufności estymatora Kaplana-Meiera dla S(0.2) i n = 50")
+
+result = int_sim(0.2, 0.05, 100)
+df = as.data.frame(result)
+rownames(df) = c("pokrycie", "długość")
+kable(df, caption = "\\label{tab:psim3} Symulacyjnie wyznaczone pokrycia i długości punktowych przedziałów ufności estymatora Kaplana-Meiera dla S(0.2) i n = 100")
+
+result = int_sim(0.7, 0.05, 30)
+df = as.data.frame(result)
+rownames(df) = c("pokrycie", "długość")
+kable(df, caption = "\\label{tab:psim4} Symulacyjnie wyznaczone pokrycia i długości punktowych przedziałów ufności estymatora Kaplana-Meiera dla S(0.7) i n = 30")
+
+result = int_sim(0.7, 0.05, 50)
+df = as.data.frame(result)
+rownames(df) = c("pokrycie", "długość")
+kable(df, caption = "\\label{tab:psim5} Symulacyjnie wyznaczone pokrycia i długości punktowych przedziałów ufności estymatora Kaplana-Meiera dla S(0.7) i n = 50")
+
+result = int_sim(0.7, 0.05, 100)
+df = as.data.frame(result)
+rownames(df) = c("pokrycie", "długość")
+kable(df, caption = "\\label{tab:psim6} Symulacyjnie wyznaczone pokrycia i długości punktowych przedziałów ufności estymatora Kaplana-Meiera dla S(0.7) i n = 100")
+
+```
