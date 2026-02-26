@@ -1,0 +1,1556 @@
+---
+title: "**Sprawozdanie 2**"
+author: "**Igor Misterowicz**"
+date: "**2025-11-08**"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    toc: true
+    toc_depth: 3
+  word_document:  
+    toc: true
+    number_sections: true
+  html_document:
+    toc: true
+    df_print: paged
+    number_sections: true
+lang: pl
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "", fig.align = "center")
+
+
+set.seed(123)
+library(coin)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(cowplot)
+library(latex2exp)
+library(dplyr)
+library(tidyr)
+library(survival)
+library(eha)
+library(timereg)
+library(nltm)
+library(patchwork)
+library(fic)
+
+```
+
+```{r,echo=FALSE}
+data = lung
+data = data[, c("status", "time", "age", "sex", "ph.ecog", "ph.karno")]
+data = na.omit(data) 
+age_mean = mean(data$age)
+data$age = data$age - age_mean
+ph.karno_mean = mean(data$ph.karno)
+data$ph.karno = data$ph.karno - ph.karno_mean
+data$sex = as.factor(data$sex)
+data$ph.ecog = as.factor(data$ph.ecog)
+attach(data)
+```
+
+\newpage
+
+# Lista 10
+
+## Zadanie 1 
+
+```{r}
+model<-coxph(formula=Surv(time,status==2)~age+sex+ph.ecog+ph.karno, data=data)
+```
+
+```{r,eval=FALSE}
+model$coeff
+```
+
+Poniżej w tabeli znajdują się oszacowane parametry modelu proporcjonalnych hazardów Coxa opisanego w poleceniu zadania.
+
+```{r,echo=FALSE}
+kable(round(model$coefficients,3), col.names = c("Wartości współczynników modelu"))
+```
+
+## Zadanie 2 
+
+Zgodnie z definicją 
+$$
+h_z(t)=h_0(t)\exp(0.013 \cdot age-0.566 \cdot sex2 +0.578 \cdot ph.ecog1 +1.24 \cdot ph.ecog2 +0.2.396 \cdot ph.ecog3 +0.012 \cdot ph.karno)
+$$
+Każdy z współczynników będziemy interpretować z założeniem, że pozostałe zmienne są stałe.
+
+Interperetacja współczynnika $age$.
+
+Niech $h_0(t)$ oznacza funkcje hazardu jednostki o zerowym wektorze charakterystyk, czyli w rozważanym
+przypadku - funkcję hazardu pacjenta z grupy zerowej. W tym przypadku o danym wieku bazowym. $h_1(t)$ oznacza funkcję hazardu pacjenta o rok straszego, od tego w wieku bazowym. 
+
+$$
+h_1(t)=h_0(t)\exp(0.013)>h_0(t), \quad t\in \mathbb {R}
+$$
+Funkcje przeżycia $S_0(t),S_1(t)$ oznaczają odpowiednio funkcję przeżycia  pacjenta, w danym wieku i o rok starszego 
+
+
+$$
+S_1(t)=[S_0(t)^{\exp(0.013)}]<S_0(t)
+$$
+Przy reszcie stałych zmiennych wzrost wieku pacjenta o 1 rok zwiększa wartość funkcji hazardu, a zatem zmniejsza wartość funkcji przeżycia w porównaniu z pacjentem w wieku bazowym.
+
+Interpretacja współczynnika $sex2$
+
+Niech $h_0(t)$ oznacza funkcje hazardu jednostki o zerowym wektorze charakterystyk, czyli w rozważanym
+przypadku - funkcję hazardu pacjenta z grupy zerowej. W tym przypadku pacjent jest płci męskiej. $h_1(t)$ oznacza funkcję hazardu pacjenta płci żeńskiej.
+
+$$
+h_1(t)=h_0(t)\exp(-0.566)<h_0(t), \quad t\in \mathbb {R}
+$$
+Funkcje przeżycia $S_0(t),S_1(t)$ oznaczają odpowiednio funkcję przeżycia  pacjenta, płci męskiej i płci żeńskiej.
+
+
+$$
+S_1(t)=[S_0(t)^{\exp(-0.573)}]>S_0(t)
+$$
+Przy reszcie stałych zmiennych wartości funkcji hazardu pacjenta płci żeńskiej jest mniejsza, niż wartość funkcji hazardu pacjenta płci męskiej. Zatem zwiększa się wartość funkcji przeżycia pacjenta płci żeńskiej w porównaniu z pacjentem płci męskiej.
+
+Interperetacja współczynnika $ph.ecgo$.
+
+Niech $h_0(t)$ oznacza funkcje hazardu jednostki o zerowym wektorze charakterystyk, czyli w rozważanym
+przypadku - funkcję hazardu pacjenta z grupy zerowej. W tym przypadku o sprawności prawidłowej w skali ECOG według lekarza (ph.ecog=0). $h_1(t), h_2(t), h_3(t)$ oznaczają funkcje hazardu pacjenta o gorszej sprawności w tej samej skali ECOG. 
+
+$$
+h_1(t)=h_0(t)\exp(0.578)>h_0(t), \quad t\in \mathbb {R}
+$$
+$$
+h_2(t)=h_0(t)\exp(1.24)>h_0(t), \quad t\in \mathbb {R}
+$$
+$$
+h_3(t)=h_0(t)\exp(2.396)>h_0(t), \quad t\in \mathbb {R}
+$$
+
+Funkcje przeżycia $S_0(t),S_1(t)$ oznaczają odpowiednio  pacjenta, o sprawności prawidłowej i trochę gorszej.
+
+
+$$
+S_1(t)=[S_0(t)^{\exp(0.578)}]<S_0(t)
+$$
+$$
+S_2(t)=[S_0(t)^{\exp(1.24)}]<S_0(t)
+$$
+$$
+S_3(t)=[S_0(t)^{\exp(2.396)}]<S_0(t)
+$$
+
+Przy reszcie ustalonych stałych zmiennych spadek sprawności pacjenta (wzrost o 1 punkt w skali ECOG) zwiększa wartość funkcji hazardu, a zatem zmniejsza wartość funkcji przeżycia w porównaniu z pacjentem z grupy bazowej o prawidłowej sprawności (0 puntków w skali ECOG) ocenionej przez lekarza. 
+
+Interperetacja współczynnika $ph.karno$.
+
+Niech $h_0(t)$ oznacza funkcje hazardu jednostki o zerowym wektorze charakterystyk, czyli w rozważanym przypadku - funkcję hazardu pacjenta z grupy zerowej. W tym przypadku pacjenta o braku jakiejkolwiek sprawności - zgon w skali Karnofsky’ego według lekarza. $h_1(t)$ oznacza funkcję hazardu pacjenta o lepszej sprawności w tej samej skali. 
+
+$$
+h_1(t)=h_0(t)\exp(0.012)>h_0(t), \quad t\in \mathbb {R}
+$$
+
+Funkcje przeżycia $S_0(t),S_1(t)$ oznaczają odpowiednio  pacjenta, o braku sprawności i występowaniu sprawności według lekarza.
+
+
+$$
+S_1(t)=[S_0(t)^{\exp(0.012)}]<S_0(t)
+$$
+
+Przy reszcie ustalonych stałych zmiennych wzrost punktów o 1 w skali Karnofsky’ego zwiększa wartość funkcji hazardu, a zatem zmniejsza wartość funkcji przeżycia w porównaniu z pacjentem o braku sprawności (0 puntków w skali Karnofsky’ego) ocenionej przez lekarza. Nasz model zatem nie odzwierciedla w tym przypadku oczekiwań klinicznych.
+
+
+## Zadanie 3
+
+Estymator Breslowa bazowej skumulowanej funkcji hazardu
+
+$$
+\hat{H}_0(t) = \sum_{i:\tau_i \le t} \frac{1}{\sum_{j \in R(\tau_i)} \exp(\hat{\beta}^T z_j)}
+$$
+
+Estymator bazowej funkcji przeżycia
+
+$$
+\hat{S}_0(t)=\exp[-\hat{H}_0(t)]
+$$
+
+```{r}
+model<-coxph(formula=Surv(time,status==2)~age+sex+ph.ecog+ph.karno,data=data)
+f_hazardu_bazowa<-basehaz(model, centered=FALSE)
+f_przeżycia_bazowa<-exp(-(f_hazardu_bazowa$hazard))
+```
+
+Pierwsze 6 oszacowań bazowej skumulowanej funkcji hazardu.
+
+```{r,echo=FALSE}
+f_hazardu_bazowa$hazard <- round(f_hazardu_bazowa$hazard,5)
+kable(head(f_hazardu_bazowa), caption="Pierwsze 6 oszacowań bazowej skumulowanej funkcji hazardu", col.names = c("Wartość", "Czas (w dniach)"))
+```
+
+
+Pierwsze 6 oszacowań bazowej funkcji przeżycia.
+
+```{r,echo=FALSE}
+tabela_przezycia <- data.frame(
+  Wartość = head(round(f_przeżycia_bazowa, 3)),
+  Czas = head(f_hazardu_bazowa$time)
+)
+
+kable(tabela_przezycia, caption="Pierwsze 6 oszacowań bazowej funkcji przeżycia", col.names = c("Wartość", "Czas (w dniach)"))
+```
+Poszczególne oszacowania na wykresie.
+
+```{r,echo=FALSE, fig.height=4, fig.width=6}
+df_plot <- data.frame(
+  Czas = f_hazardu_bazowa$time,
+  Hazard = f_hazardu_bazowa$hazard,
+  Przezycie = f_przeżycia_bazowa
+) %>%
+  tidyr::pivot_longer(cols = c(Hazard, Przezycie), 
+                      names_to = "Funkcja", 
+                      values_to = "Wartosc") %>%
+mutate(Funkcja = recode(Funkcja,"Hazard" = "Bazowa skumulowana \n funkcja hazardu","Przezycie" = "Bazowa funkcja przeżycia"))
+
+ggplot(df_plot, aes(x = Czas, y = Wartosc, color = Funkcja)) +
+  geom_step(linewidth = 1) +
+  labs(
+    title = "Wykres oszacowania bazowej skumulowanej \n funkcji hazardu i bazowej funkcji \n przeżycia odpowiadającej rozkładowi czasu życia ",
+    x = "Czas obserwacji w dniach",
+    y = "Wartość funkcji",
+    color = "Oszacowanie funkcji"
+  ) +
+  scale_color_manual(values = c("Bazowa skumulowana \n funkcja hazardu" = "blue", "Bazowa funkcja przeżycia" = "deeppink"))+
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title.x = element_text(size = 10),
+    axis.title.y = element_text(size = 10),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8)
+  )
+```
+
+
+## Zadanie 4 
+
+### Wyprowadzenie do podpunktów a) i b).
+
+Funkcja hazardu w modelu Coxa.
+
+$$
+h_z(t)=h_0(t)\cdot\exp(\beta_1\cdot age+\beta_2\cdot ph.ecog+ \beta_3 \cdot ph.karno)
+$$
+Estymator Breslowa bazowej skumulowanej funkcji hazardu.
+
+$$
+\hat{H}_0(t) = \sum_{i:\tau_i \le t} \frac{1}{\sum_{j \in R(\tau_i)} \exp(\hat{\beta}^T z_j)}
+$$
+Skumulowana funkcja hazardu dla konkretego pacjenta wyraża się wzorem.
+
+$$
+\hat{H}(t)=\hat{H}_0(t) \cdot \exp(\hat{\beta}^T z_j)
+$$
+
+### a)
+
+Oszacowanie skumulowanej funkcji hazardu odpowiadającej rozkładowi czasu życia kobiety:
+
+* w wieku 70 lat
+
+* o charakterystyce ph.ecog=1
+
+* o charakterystyce ph.karno=90
+
+```{r}
+Z<-c(1,70-age_mean,1,0,0,90-ph.karno_mean)
+model<-coxph(formula=Surv(time,status==2)~sex+age+ph.ecog+ph.karno,data=data)
+f_hazardu_bazowa<-basehaz(model,centered = FALSE)
+f_hazardu<-f_hazardu_bazowa$hazard*exp(sum(model$coefficients*Z))
+```
+
+```{r, echo=FALSE}
+p1<-ggplot(data =NULL, aes(x = f_hazardu_bazowa$time, y = f_hazardu)) + 
+  geom_step(linewidth = 1, color = "blue")+labs(title = "Wykres oszacowania skumulowanej \n funkcji hazardu odpowiadającej \n rozkładowi czasu życia",
+    y = "Oszacowanie skumulowanej funkcji hazardu",
+    x = "Czas obserwacji w dniach")+
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title.x = element_text(size = 10),           
+    axis.title.y = element_text(size = 10)            
+  )
+
+p2<-ggplot(data =NULL, aes(x = f_hazardu_bazowa$time, y = log(f_hazardu))) + 
+  geom_step(linewidth = 1, color = "blue")+labs(title = "Wykres logarytmu oszacowania \n skumulowanej funkcji hazardu \n odpowiadającej rozkładowi \n czasu życia",
+    y = "Zlogarytmowane oszacowanie \n skumulowanej funkcji hazardu",
+    x = "Czas obserwacji w dniach")+
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title.x = element_text(size = 10),           
+    axis.title.y = element_text(size = 10)            
+  )
+
+l10df = data.frame("t" = f_hazardu_bazowa$time,
+                    "H_z1" = f_hazardu)
+p1+p2
+```
+
+### b)
+
+Oszacowanie skumulowanej funkcji hazardu odpowiadającej rozkładowi czasu życia kobiety:
+
+* w wieku 70 lat
+
+* o charakterystyce ph.ecog=2
+
+* o charakterystyce ph.karno=90
+
+```{r}
+Z<-c(1,70-age_mean,0,1,0,90-ph.karno_mean)
+model<-coxph(formula=Surv(time,status==2)~sex+age+ph.ecog+ph.karno,data=data)
+f_hazardu_bazowa<-basehaz(model,centered = FALSE)
+f_hazardu<-f_hazardu_bazowa$hazard*exp(sum(model$coefficients*Z))
+```
+
+
+```{r, echo=FALSE}
+p1<-ggplot(data =NULL, aes(x = f_hazardu_bazowa$time, y = f_hazardu)) + 
+  geom_step(linewidth = 1, color = "blue")+labs(title = "Wykres oszacowania skumulowanej \n funkcji hazardu odpowiadającej \n rozkładowi czasu życia",
+    y = "Oszacowanie skumulowanej funkcji hazardu",
+    x = "Czas obserwacji w dniach")+
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title.x = element_text(size = 10),           
+    axis.title.y = element_text(size = 10)            
+  )
+
+p2<-ggplot(data =NULL, aes(x = f_hazardu_bazowa$time, y = log(f_hazardu))) + 
+  geom_step(linewidth = 1, color = "blue")+labs(title = "Wykres logarytmu oszacowania \n skumulowanej funkcji hazardu \n odpowiadającej rozkładowi \n czasu życia",
+    y = "Zlogarytmowane oszacowanie \n skumulowanej funkcji hazardu",
+    x = "Czas obserwacji w dniach")+
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title.x = element_text(size = 10),           
+    axis.title.y = element_text(size = 10)            
+  )
+
+l10df["H_z2" ]= f_hazardu
+
+p1+p2
+```
+
+Porównanie na wykresach.
+
+```{r,echo=FALSE, fig.height=4,fig.width=5}
+p3<- ggplot(l10df, aes(x = t)) +
+  geom_step(aes(y = H_z1, color = "ph.ecog=1"), linewidth = 1) +
+  geom_step(aes(y = H_z2, color = "ph.ecog=2"), linewidth = 1) +scale_color_manual(values = c("ph.ecog=1" = "blue", "ph.ecog=2" = "deeppink")) +
+  labs(title = "Wykres oszacowania skumulowanej \n funkcji hazardu odpowiadającej \n rozkładowi czasu życia",
+       x = "Czas obserwacji w dniach",
+       y = "H(t)",
+       color = "Legenda") +
+  theme_minimal() +
+    theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.text = element_text(size = 8),   
+    legend.title = element_text(size = 10)   
+  )
+
+p4<- ggplot(l10df, aes(x = t)) +
+  geom_step(aes(y = log(H_z1), color = "ph.ecog=1"), linewidth = 1) +
+  geom_step(aes(y = log(H_z2), color = "ph.ecog=2"), linewidth = 1) +scale_color_manual(values = c("ph.ecog=1" = "blue", "ph.ecog=2" = "deeppink")) +
+  labs(title = "Wykres logarytmu oszacowania \n skumulowanej funkcji hazardu \n odpowiadającej rozkładowi \n czasu życia",
+       x = "Czas obserwacji w dniach",
+       y = "log(H(t))",
+       color = "Legenda") +
+  theme_minimal() +
+   theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.text = element_text(size = 8),   
+    legend.title = element_text(size = 10)   
+  )
+p3
+p4
+```
+
+Na wykresach  oraz  zauważamy, że krzywa funkcji hazardu dla ph.ecog=1 jest ściśle mniejsza niż ta dla
+ph.ecog=2. Jest to zgodne z intuicją (mniejsze wartości ph.ecog oznaczają wyższą sprawność danej osoby). 
+Proporcjonalne wartości na wykresie logarytmicznym powinny być przesunięte względem siebie o stałą, co obserwujemy na wyresie. Krzywe są do siebie równoległe. 
+Zatem nie daje nam to powodów, wątpliwości do uznania modelu za nieodpowiedni.
+
+## Zadanie 5 
+
+### Wyprowadzenie do podpunktów a) i b).
+
+Funkcja hazardu w modelu Coxa.
+
+$$
+h_z(t)=h_0(t)\cdot\exp(\beta_1\cdot age+\beta_2\cdot ph.ecog+ \beta_3 \cdot ph.karno)
+$$
+Estymator Breslowa bazowej skumulowanej funkcji hazardu.
+
+$$
+\hat{H}_0(t) = \sum_{i:\tau_i \le t} \frac{1}{\sum_{j \in R(\tau_i)} \exp(\hat{\beta}^T z_j)}
+$$
+Skumulowana funkcja hazardu dla konkretego pacjenta wyraża się wzorem.
+
+$$
+\hat{H}(t)=\hat{H}_0(t) \cdot \exp(\hat{\beta}^T z_j)
+$$
+Funkcja przeżycia odpowiadająca rozkładowi czasu życia.
+
+$$
+\hat{S}(t)=\exp[-\hat{H}(t)]
+$$
+
+### a)
+
+Oszacowanie funkcji przeżycia (w dniach) odpowiadającej rozkładowi czasu życia kobiety w wieku 70 lat o charakterystyce ph.ecog=1 i ph.karno=90.
+
+```{r}
+Z<-c(1,70-age_mean,1,0,0,90-ph.karno_mean)
+model<-coxph(formula=Surv(time,status==2)~sex+age+ph.ecog+ph.karno,data=data)
+f_hazardu_bazowa<-basehaz(model,centered = FALSE)
+f_hazardu<-f_hazardu_bazowa$hazard*exp(sum(model$coefficients*Z))
+f_przeżycia<-exp(-f_hazardu)
+```
+
+```{r,echo=FALSE, fig.height=3, fig.width=4}
+ggplot(data = NULL, aes(x = f_hazardu_bazowa$time, y = f_przeżycia)) +
+  geom_step(linewidth = 1, color = "deeppink") +
+  labs(
+    title = "Wykres oszacowania funkcji przeżycia pacjenta \n o zadanej charakterystyce",
+    x = "Czas obserwacji w dniach",
+    y = "Wartość funkcji przeżycia"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title.x = element_text(size = 10),
+    axis.title.y = element_text(size = 10)
+  )
+```
+
+
+Szacowane prawdopodobieństwo, że czas życia kobiet o powyżej podanych charakterystykach bę
+dzie większy niż 300 dni.
+
+```{r}
+czas<-f_hazardu_bazowa$time
+indeks<-(which(czas>=300))[1]
+f_hazardu<-f_hazardu_bazowa$hazard[indeks]*exp(sum(model$coefficients*Z))
+f_przeżycia1<-exp(-f_hazardu)
+```
+Prawdopodobieństwo to wynosi `r round(f_przeżycia1,4)`
+
+
+### b)
+
+Oszacowanie funkcji przeżycia (w dniach) odpowiadającej rozkładowi czasu życia kobiety w wieku 70 lat o charakterystyce ph.ecog=2 i ph.karno=90.
+
+```{r}
+Z<-c(1,70-age_mean,0,1,0,90-ph.karno_mean)
+model<-coxph(formula=Surv(time,status==2)~sex+age+ph.ecog+ph.karno,data=data)
+f_hazardu_bazowa<-basehaz(model,centered = FALSE)
+f_hazardu<-f_hazardu_bazowa$hazard*exp(sum(model$coefficients*Z))
+f_przeżycia<-exp(-f_hazardu)
+```
+
+```{r,echo=FALSE, fig.height=3, fig.width=4}
+ggplot(data = NULL, aes(x = f_hazardu_bazowa$time, y = f_przeżycia)) +
+  geom_step(linewidth = 1, color = "deeppink") +
+  labs(
+    title = "Wykres oszacowania funkcji przeżycia pacjenta \n o zadanej charakterystyce",
+    x = "Czas obserwacji w dniach",
+    y = "Wartość funkcji przeżycia"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title.x = element_text(size = 10),
+    axis.title.y = element_text(size = 10)
+  )
+```
+
+Szacowane prawdopodobieństwo, że czas życia kobiet o powyżej podanych charakterystykach bę
+dzie większy niż 300 dni.
+
+```{r}
+czas<-f_hazardu_bazowa$time
+indeks<-(which(czas>=300))[1]
+f_hazardu<-f_hazardu_bazowa$hazard[indeks]*exp(sum(model$coefficients*Z))
+f_przeżycia<-exp(-f_hazardu)
+```
+
+Prawdopodobieństwo to wynosi `r round(f_przeżycia,4)`
+
+Dla ph.ecog=1 oraz ph.ecog=2 wynoszą one odpowiednio `r round(f_przeżycia1,4)`, `r round(f_przeżycia,4)`. Mogliśmy się tego spodziewać, ponieważ niższe ph.ecog oznacza lepszy stan zdrowia.
+
+Porównanie otrzymanego oszacowania prawdopodobieństwa dla kobiety o charakterystykach opisanych w podpunkcie a) z prawdopodobieństwem otrzymanym w zadaniu 3 oraz 8 z listy 9.
+
+```{r,echo=FALSE}
+tabela<-data.frame(Zadanie=c("Zadanie 5a) lista 10","Zadanie 3 lista 9","Zadanie 8 lista 9"),Model=c("Cox PH", "AFT Weibulla","PH Weibulla"),Wartość=c(round(f_przeżycia1,4),0.5806,0.5806))
+kable(tabela)
+```
+Oszacowanie prawdopodobieństwa na liście 9 w zadaniu 3 (model ATF) i 8 (model PH) jest identyczne. W porówaniu z wartością otrzymaną w zadaniu 5 w podpunkcie a) z listy 10 przy użyciu modelu proporcjonalnych hazardów Coxa zauważamy, że oszacowania otrzymane na liście 9 są mniejsze. Zauważalna różnica jest na drugim miejscu po przecinku. Nie zmienia jednak to faktu, że model wskazują na niemal takie same prawdopodobieństwa, zatem możemy uznać, że każdy z tych modeli dobrze radzi sobie z danymi.
+
+## Zadanie 6 
+
+Wykres oszacowanej w zadaniu 5 w podpunkcie a) funkcji przeżycia (w dniach) odpowiadającej
+rozkładowi czasu życia kobiety w wieku 70 lat o charakterystyce ph.ecog=1 i ph.karno=90.
+
+```{r,echo=FALSE, fig.height=3, fig.width=4}
+Z<-c(1,70-age_mean,1,0,0,90-ph.karno_mean)
+model<-coxph(formula=Surv(time,status==2)~sex+age+ph.ecog+ph.karno,data=data)
+f_hazardu_bazowa<-basehaz(model,centered = FALSE)
+f_hazardu<-f_hazardu_bazowa$hazard*exp(sum(model$coefficients*Z))
+f_przeżycia<-exp(-f_hazardu)
+
+l10df["S_z1"] = f_przeżycia
+
+ggplot(data =NULL, aes(x = f_hazardu_bazowa$time, y = f_przeżycia)) + 
+  geom_line(linewidth = 1, color = "blue")+labs(title = "Wykres oszacowania funkcji przeżycia \n odpowiadającej rozkładowi czasu życia",
+    y = "Oszacowanie funkcji przeżycia",
+    x = "Czas obserwacji w dniach")+
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title.x = element_text(size = 10),           
+    axis.title.y = element_text(size = 10)            
+  )
+```
+
+Porównanie powyższego wykresu z wykresem otrzymanym w zadaniu 9 na liście 9. 
+
+
+
+
+```{r, fig.cap = "\\label{fig:survcomp} Porównanie oszacowań funkcji przeżycia w modelach \nPH oraz Cox PH na danych lung, dla kobiety w wieku 70 lat\no charakterystyce ph.ecog=1 i ph.karno=90", echo = FALSE,fig.height=4, fig.width=5}
+z1 = c(1, 70 - age_mean, 1, 0, 0, 90 - ph.karno_mean)
+
+ph_fit = phreg(Surv(time, status) ~
+                    sex +
+                    age +
+                    ph.ecog +
+                    ph.karno,
+                    data = data,
+                    dist = "weibull")
+
+beta1 = as.numeric(ph_fit$coefficients[1:6])
+scale = as.numeric(exp(ph_fit$coefficients[7]))
+shape = as.numeric(exp(ph_fit$coefficients[8]))
+lambda1 = scale^(-shape)
+alpha1 = shape
+ph_S0 = function(x) exp(-lambda1*x^alpha1)
+ph_S = function(x, z) ph_S0(x)^exp(sum(beta1*z))
+x_ax = seq(1, 1050, length.out = 100)
+y_ax2 = sapply(x_ax, function(x) ph_S(x,z1))
+
+df_ph <- data.frame(
+  x = x_ax,
+  y = y_ax2,
+  model = "PH"
+)
+df_cox <- data.frame(
+  x = f_hazardu_bazowa$time,
+  y = f_przeżycia,
+  model = "Cox PH"
+)
+
+df <- rbind(df_ph, df_cox)
+
+ggplot(df, aes(x = x, y = y, color = model, linetype = model)) +
+  geom_line(linewidth = 1) +
+  scale_color_manual(
+    name = "Legenda",
+    values = c("PH" = "deeppink", "Cox PH" = "blue")
+  ) +
+  scale_linetype_manual(
+    name = "Legenda",
+    values = c("Cox PH" = "solid", "PH" = "dashed")
+  ) +
+  xlab("Czas obserwacji w dnaich - t") +
+  ylab("S(t)") +
+  ggtitle("Porównanie oszacowań funkcji przeżycia w modelach \nPH oraz Cox PH na danych lung, dla kobiety w wieku 70 lat\no charakterystyce ph.ecog=1 i ph.karno=90")+theme_minimal() + theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title.x = element_text(size = 10),           
+    axis.title.y = element_text(size = 10)            
+  )
+```
+
+Na podstawie powyższego wykresu ... , możemy stwierdzić, że krzywa funkjci Cox PH oraz krzywa funkcji PH pokrywają się niemal na każdym etapie obserwowanego czasu. Zatem możemy wnioskować, że oba model dobrze "radzą" sobie z danymi.
+
+# Lista 12 
+
+## zadanie 1
+
+W poniższych podpunktach przyjmuje  model przyspieszonego czasu awarii, w którym bazowa funkcja przeżycia odpowiada rozkładowi Weibulla, przyjmując za zmienną zależną zmienną $time$, a za charakterystyki zmienne: $age, sex, ph.ecog, ph.karno$.
+
+```{r}
+model.walda<-survreg(Surv(time,status==2)~sex+age+ph.ecog+ph.karno,data=data,dist ="weibull")
+```
+
+
+### a)
+
+Test Walda
+
+Korzystamy z testu Walda, na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że zmienna age nie jest istotna w przyjętym modelu.
+
+```{r,eval=FALSE}
+round((summary(model.walda)[["table"]][,4]), 5)
+```
+
+```{r,echo=FALSE}
+kable(round((summary(model.walda)[["table"]][,4]), 5),col.names = c("","Wartości p"))
+```
+
+
+Z powyższego podsumowania wynika, że korzystając z testu Walda, na poziomie istotności 0.05, nie mamy podstaw do odrzucenia hipotezy, że zmienna $age$ nie jest istotna w przyjętym modelu. Wartość p w tym teście jest równa $0.20530$. 
+
+Test IW
+
+Model bez zmiennej $age$, wykorzystywany do konstrukcji testu IW.
+
+```{r}
+model.IW<-survreg(Surv(time,status==2)~sex+ph.ecog+ph.karno, data=data, dist ="weibull")
+```
+
+Korzystamy z testu IW, na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że zmienna age nie jest istotna w przyjętym modelu
+
+```{r, eval=FALSE}
+anova(model.IW,model.walda)$`Pr(>Chi)`[2]
+```
+
+Wartość p w tym teście jest równa `r anova(model.IW,model.walda)$"Pr(>Chi)"[2]`. Z powyższej informacji wynika, że korzystając z testu IW, na poziomie istotności 0.05, nie mamy podstaw do odrzucenia hipotezy, że zmienna $age$ nie jest istotna w przyjętym modelu. 
+
+
+### b)
+
+Test Walda
+
+Korzystamy z testu Walda na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że zmienna $sex$ nie jest istotna w przyjętym modelu.
+
+```{r,eval=FALSE}
+round((summary(model.walda)[["table"]][,4]), 5)
+```
+
+```{r,echo=FALSE}
+kable(round((summary(model.walda)[["table"]][,4]), 5),col.names = c("","Wartości p"))
+```
+
+
+Z powyższego podsumowania wynika, że korzystając z testu Walda, na poziomie istotności należy odrzucić hipotezę, że zmienna $sex$ nie jest istotna w przyjętym modelu. Wartość p w tym teście jest równa $0.00091$.
+
+Test IW
+
+Model bez zmiennej $sex$, wykorzystywany do konstrukcji testu IW.
+
+```{r}
+model.IW<-survreg(Surv(time,status==2)~age+ph.ecog+ph.karno, data=data, dist ="weibull")
+```
+
+Korzystamy z testu IW, na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że zmienna sex nie jest istotna w przyjętym modelu
+
+```{r, eval=FALSE}
+anova(model.IW,model.walda)$`Pr(>Chi)`[2]
+```
+
+Wartość p w tym teście jest równa `r anova(model.IW,model.walda)$"Pr(>Chi)"[2]` `r format(anova(model.IW, model.walda)$"Pr(>Chi)"[2], scientific = FALSE)`. Z powyższej informacji wynika, że korzystając z testu IW, na poziomie istotności 0.05, powinniśmy odrzucić hipotezę, że zmienna $sex$ nie jest istotna w przyjętym modelu. 
+
+### c)
+
+Test IW
+
+Korzystamy z testu IW - ilorazu wiarygodności, na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że rozkład czasu życia jest taki sam dla pacjenta o sprawności ECOG wg. lekarza na poziomie 0, 1, 2, 3 (zmienna $ph.ecog$ teoretycznie może przyjmować wartości 0, 1, 2, 3, 4, 5, ale w zbiorze danych mamy tylko wartości od 0 do 3).
+
+Model bez zmiennej $ph.ecog$, wykorzystywany do konstrukcji testu IW.
+
+```{r}
+model.IW<-survreg(Surv(time,status==2)~sex+age+ph.karno, data=data, dist ="weibull")
+```
+
+```{r, eval=FALSE}
+anova(model.IW,model.walda)$`Pr(>Chi)`[2]
+```
+
+Wartość p w tym teście jest równa `r anova(model.IW,model.walda)$"Pr(>Chi)"[2]`. Z powyższej informacji wynika, że korzystając z testu IW, na poziomie istotności 0.05, powinniśmy odrzucić hipotezę, że rozkład czasu życia jest taki sam dla pacjenta o sprawności ECOG wg. lekarza na poziomie
+0, 1, 2, 3. Możemy zatem wywnioskować, że przynajmniej jeden z poziomów ECOG różni się istotnie pod względem rozkładu czasu życia pacjenta. 
+
+## zadanie 2 
+
+W poniższych podpunktach przyjmuje model proporcjonalnych hazardów Coxa, przyjmując za zmienną zależną zmienną $time$, a za charakterystyki zmienne: $age, sex, ph.ecog, ph.karno$.
+
+```{r}
+model.cox<-coxph(formula=Surv(time,status==2)~age+sex+ ph.ecog+ph.karno, data=data)
+```
+
+### a)
+
+Test Walda
+
+Korzystamy z testu Walda, na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że zmienna age nie jest istotna w przyjętym modelu.
+
+```{r,eval=FALSE}
+round((summary(model.cox)$coefficients[, "Pr(>|z|)"]), 6)
+```
+
+```{r,echo=FALSE}
+kable(round((summary(model.cox)$coefficients[, "Pr(>|z|)"]), 6),col.names = c("","Wartości p"))
+```
+
+Z powyższego podsumowania wynika, że korzystając z testu Walda, na poziomie istotności 0.05, nie mamy podstaw do odrzucenia hipotezy, że zmienna $age$ nie jest istotna w przyjętym modelu. Wartość p w tym teście jest równa $0.183903$. 
+
+Test IW
+
+Model bez zmiennej $age$, wykorzystywany do konstrukcji testu IW.
+
+```{r}
+model.IW<-coxph(formula=Surv(time,status==2)~sex+ ph.ecog+ph.karno, data=data)
+```
+
+Korzystamy z testu IW, na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że zmienna age nie jest istotna w przyjętym modelu.
+
+```{r, eval=FALSE}
+anova(model.IW,model.cox)$`Pr(>|Chi|)`[2]
+```
+Wartość p w tym teście jest równa `r anova(model.IW,model.cox)$"Pr(>|Chi|)"[2]`. Z powyższej informacji wynika, że korzystając z testu IW, na poziomie istotności 0.05, nie mamy podstaw do odrzucenia hipotezy, że zmienna $age$ nie jest istotna w przyjętym modelu.
+
+### b)
+
+Test Walda
+
+Korzystamy z testu Walda na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że zmienna $sex$ nie jest istotna w przyjętym modelu.
+
+```{r,eval=FALSE}
+round((summary(model.cox)$coefficients[, "Pr(>|z|)"]), 6)
+```
+
+```{r,echo=FALSE}
+kable(round((summary(model.cox)$coefficients[, "Pr(>|z|)"]), 6),col.names = c("","Wartości p"))
+```
+
+Z powyższego podsumowania wynika, że korzystając z testu Walda, na poziomie istotności należy odrzucić hipotezę, że zmienna $sex$ nie jest istotna w przyjętym modelu. Wartość p w tym teście jest równa $0.000861$.
+
+Test IW
+
+Model bez zmiennej $sex$, wykorzystywany do konstrukcji testu IW.
+
+```{r}
+model.IW<-coxph(formula=Surv(time,status==2)~age+ ph.ecog+ph.karno, data=data)
+```
+
+Korzystamy z testu IW, na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że zmienna sex nie jest istotna w przyjętym modelu
+
+```{r, eval=FALSE}
+anova(model.IW,model.cox)$`Pr(>|Chi|)`[2]
+```
+Wartość p w tym teście jest równa `r anova(model.IW,model.cox)$"Pr(>|Chi|)"[2]`. Z powyższej informacji wynika, że korzystając z testu IW, na poziomie istotności 0.05, powinniśmy odrzucić hipotezę, że zmienna $sex$ nie jest istotna w przyjętym modelu.
+
+### c)
+
+Test IW
+
+Korzystamy z testu IW - ilorazu wiarygodności, na poziomie istotności 0.05. Moją hipotezą do zweryfikowania jest stwierdzenie, że rozkład czasu życia jest taki sam dla pacjenta o sprawności ECOG wg. lekarza na poziomie 0, 1, 2, 3 (zmienna $ph.ecog$ teoretycznie może przyjmować wartości 0, 1, 2, 3, 4, 5, ale w zbiorze danych mamy tylko wartości od 0 do 3).
+
+Model bez zmiennej $ph.ecog$, wykorzystywany do konstrukcji testu IW.
+
+```{r}
+model.IW<-coxph(formula=Surv(time,status==2)~age+sex+ph.karno, data=data)
+```
+
+```{r, eval=FALSE}
+anova(model.IW,model.cox)$`Pr(>|Chi|)`[2]
+```
+
+Wartość p w tym teście jest równa `r anova(model.IW,model.cox)$"Pr(>|Chi|)"[2]`. Z powyższej informacji wynika, że korzystając z testu IW, na poziomie istotności 0.05, powinniśmy odrzucić hipotezę, że rozkład czasu życia jest taki sam dla pacjenta o sprawności ECOG wg. lekarza na poziomie
+0, 1, 2, 3. Możemy zatem wywnioskować, że przynajmniej jeden z poziomów ECOG różni się istotnie pod względem rozkładu czasu życia pacjenta. 
+
+# Zadania dodatkowe
+
+## Zadanie 3 z listy 12
+
+### a)
+
+```{r}
+model.walda<-survreg(Surv(time,status==2)~sex+age+ph.ecog+ph.karno, data=data, dist ="weibull")
+summary(model.walda)
+```
+Usuwam age,ph.karno p-value wieksze od przyjetego poziomu istotności p
+
+
+```{r}
+model.walda<-survreg(Surv(time,status==2)~sex+ph.ecog, data=data, dist ="weibull")
+summary(model.walda)
+```
+
+nie usowam bo to 3 nic nie wnosi chyba ze sama 3
+
+
+## zadanie 4 z listy 12 
+
+## zadanie dodatkowe z listy 12
+
+
+\newpage
+
+# Lista 9
+
+## Przygotowanie danych i założenie o rozkładzie 
+
+Przeprowadzam następujące modyfikacje:
+
+- Wybieram kolumny sprecyzowane w poleceniu
+- Usuwam brakujące dane
+- Centruje "age" oraz "ph.karno"
+- Zamieniam typ "sex" oraz "ph.ecog" na faktor
+
+```{r}
+data = lung
+data = data[, c("status", "time", "age", "sex", "ph.ecog", "ph.karno")]
+data = na.omit(data) 
+age_mean = mean(data$age)
+data$age = data$age - age_mean
+ph.karno_mean = mean(data$ph.karno)
+data$ph.karno = data$ph.karno - ph.karno_mean
+data$sex = as.factor(data$sex)
+data$ph.ecog = as.factor(data$ph.ecog)
+```
+Na tej liście zadań korzystamy z parametryczych modeli w oparciu o założenie, że dane pochchodzą z rozkładu
+
+$$
+\mathcal{We}(\alpha,\lambda).
+$$
+
+
+
+## Zadanie 1
+
+Model liniowy logarytmu czasu w funkcji survreg() jest postaci:
+
+$$
+\ln(T) = \mu + \gamma^Tz + \sigma\varepsilon,
+$$
+gdzie:
+
+- $T$ to czas życia
+- $\mu$, $\sigma$, $\gamma$ to parametry modelu
+- $\varepsilon$ to reszta o określonym rozkładzie (w naszym wypadku wartości ekstremalnej, bo wybieramy, że $T$ ma rozkład Weibulla)
+
+
+```{r}
+fit_aft = survreg(Surv(time, status) ~
+                    sex +
+                    age +
+                    ph.ecog +
+                    ph.karno,
+                    data = data,
+                    dist = "weibull")
+
+gamma = fit_aft$coefficients[2:7]
+mu = fit_aft$coef[1]
+sigma = fit_aft$scale
+
+gamma
+mu 
+sigma
+
+beta = -as.numeric(gamma)
+mu = as.numeric(mu)
+sigma = as.numeric(sigma)
+
+
+```
+
+
+Chcemy przedstawić model w postaci z wykładu:
+
+$$
+S(x|z) = S_0(\exp(\beta^Tz)x),
+$$
+
+gdzie:
+
+$$
+\beta = -\gamma
+$$
+
+```{r}
+beta = -as.numeric(gamma)
+```
+
+Z dokładnością do dwóch cyfr znaczących mamy:
+
+$$
+\beta = (-0.41,\ 0.0086,\ 0.42,\ 0.93,\ 1.69,\ 0.01),
+$$
+w postaci:
+
+$$
+\beta = (sex2,\ age,\ ph.ecog1,\ ph.ecog2,\ ph.ecog3,\ ph.karno).
+$$
+
+Zmienne age oraz ph.karno mają zwykły typ numeryczny, natomiast pozostałe są indykatorami. Np. dla osoby z ph.ecog=3 podamy ph.ecog3=1 oraz
+ph.ecog1=ph.ecog2=0.
+
+
+Odczutujemy parametry rozkładu Weibulla:
+
+$$
+\lambda = exp(-\mu/\sigma),
+$$
+
+$$
+ \alpha = 1/\sigma
+$$
+
+
+```{r}
+lambda = exp(-mu/sigma)
+alpha = 1/sigma
+
+lambda
+alpha
+
+```
+
+Z dokładnością do dwóch cyfr znaczących mamy:
+
+$$
+\lambda = 0.00016, 
+$$
+
+$$
+\alpha = 1.4,
+$$
+
+## Zadanie 2
+
+Jeśli $z_1$ oraz $z_2$ są wektorami cech, to dla $\beta^T(z_1 -z_2) > 0$, osoba z $z_1$ ma w każdej chwili większe prawdopodobieństwo śmierci niż osoba z $z_2$. Patrząc na znaki wartości w wektorze $\beta$ mamy, że:
+
+- bycie kobietą wydłuża czas życia
+- wysokie wartości ph.ecog, ph.karno oraz podeszły wiek skracają czas życia
+- współczynniki dla wieku oraz ph.karno są bliskie zeru
+
+Jedyną zaskakującą obserwacją jest to, że ph.karno skraca czas życia.
+
+
+## Zadanie 3
+
+Implemetujemy oszacowanie funkcji przeżycia korzystając z faktu podanego na wykładzie:
+
+$$
+S(x|z) = \exp(-\lambda\exp(\alpha\beta^Tz)x^{\alpha})
+$$
+
+```{r}
+
+aft_S = function(x, z) exp(-lambda*exp(alpha*sum(beta*z))*x^alpha)
+
+```
+
+Obliczamy szacowane prawdopodobieństwo przeżycia 300 dni dla kobiety w wieku 70 lat o charakterystyce ph.ecog=1 i ph.karno=90.
+
+```{r}
+z = c(1, 70 - age_mean, 1, 0, 0, 90 - ph.karno_mean)
+x = 300
+
+aft_S(x,z)
+
+```
+
+W przybliżeniu wynosi ono 0.58.
+
+
+## Zadanie 4
+
+```{r, fig.cap = "\\label{fig:survest} Oszacowanie funkcji przeżycia w modelu \nATF na danych lung dla kobiety w wieku 70 lat\no charakterystyce ph.ecog=1 i ph.karno=90.", echo = FALSE}
+x_ax = seq(1, 1500, length.out = 100)
+y_ax = sapply(x_ax, function(x) aft_S(x,z))
+
+ggplot(data = NULL, aes(x = x_ax, y = y_ax)) + 
+  geom_line(linewidth = 1, color = "blue") + 
+  ylim(c(0,1)) + 
+  xlab("t (dni)") +
+  ylab("S(t)") +
+  ggtitle("Oszacowanie funkcji przeżycia w modelu ATF na danych lung, dla\nkobiety w wieku 70 lat o charakterystyce ph.ecog=1 i ph.karno=90.")
+
+```
+
+Z wykresu \ref{fig:survest} możemy odczytać np. że prawdopodobieństwo przeżycia 350 dni dla osoby o sprecyzowanej w tytule charakterystyce wynosi około 0.5.
+
+## Zadanie 5
+
+Model proporcjonalnych hazardów jest postaci
+
+$$
+h(x|z) = h_0(x)\exp(\beta^Tz).
+$$
+Można pokazać, że 
+
+$$
+S(x|z) = S_0(x)^{\exp(\beta^Tz)}.
+$$
+Dopasowuję teraz model oraz odczytuję parametry:
+
+```{r}
+ph_fit = phreg(Surv(time, status) ~
+                    sex +
+                    age +
+                    ph.ecog +
+                    ph.karno,
+                    data = data,
+                    dist = "weibull")
+
+beta1 = as.numeric(ph_fit$coefficients[1:6])
+scale = as.numeric(exp(ph_fit$coefficients[7]))
+shape = as.numeric(exp(ph_fit$coefficients[8]))
+lambda1 = scale^(-shape)
+alpha1 = shape
+
+beta1
+lambda1
+alpha1
+```
+
+Z dokładnością do dwóch cyfr znaczących otrzymujemy, że:
+
+$$
+\lambda = 0.00016, 
+$$
+
+$$
+\alpha = 1.4,
+$$
+
+$$
+\beta = (-0.57,\ 0.012,\ 0.58,\ 1.3,\ 2.3,\ 0.014).
+$$
+
+Otrzymujemy nieco inne wartości niż w modelu AFT, jednak zauważamy pewne podobieństwa:
+
+- te same znaki współczynników
+- wartości bliskie zeru dla wieku oraz ph.karno
+
+## Zadanie 6
+
+Ze względu na podobne wartości, wpływ cech na prognozy pozostaje taki sam jak w modelu AFT. Z drugiej strony, tym razem możemy powiedzieć, że jeśli $z_1$ oraz $z_2$ są wektorami cech, to:
+
+
+$$
+\frac{h(x|z_1)}{h(x|z_2)} = \exp(\beta^T(z_1-z_2)),
+$$
+
+czyli funkcje hazardu są proporcjonalne. Jeśli $\beta^T(z_1-z_2)$ > 0 to osoba o charakterystyce $z_1$ ma większa funkcję hazardu, czyli krótszy czas życia.
+
+
+## Zadanie 7
+
+Implementujemy funkcje hazardu:
+
+```{r}
+ph_h0 <- function(t) alpha1 * lambda1 * t ^ (alpha1-1)
+
+ph_h <- function(t, z) ph_h0(t) * exp(sum(beta1*z))
+```
+
+Wczytujemy wektory cech:
+
+```{r}
+z1 = c(1, 70 - age_mean, 1, 0, 0, 90 - ph.karno_mean)
+
+z2 = c(1, 70 - age_mean, 0, 1, 0, 90 - ph.karno_mean)
+```
+
+
+```{r, fig.cap="\\label{fig:hazfig} Oszacowanie funkcji hazardu w modelu proporcjonalnych hazardów\n na danych lung, dla kobiety w wieku 70 lat o charakterystyce \nph.karno=90", echo = FALSE}
+
+x_ax = seq(1, 1500, length.out = 100)
+y_ax1 = sapply(x_ax, function(x) ph_h(x,z1))
+
+x_ax = seq(1, 1500, length.out = 100)
+y_ax2 = sapply(x_ax, function(x) ph_h(x,z2))
+
+df <- data.frame(
+  x = x_ax,
+  y = log(c(y_ax1, y_ax2)),
+  hazard = rep(c("ph.ecog=1", "ph.ecog=2"), each = length(x_ax))
+)
+
+ggplot(df, aes(x = x, y = y, color = hazard)) +
+  geom_line(linewidth = 1) +
+  scale_color_manual(
+    name = "Legenda",
+    values = c("ph.ecog=1" = "blue", "ph.ecog=2" = "red")
+  ) +
+  xlab("t (dni)") +
+  ylab("logh(t)") +
+  ggtitle("Oszacowanie logarytmowanej funkcji hazardu w modelu \nproporcjonalnych hazardów na danych lung, dla kobiety w \nwieku 70 lat o charakterystyce ph.karno=90")
+```
+
+```{r, fig.cap="\\label{fig:loghazfig} Oszacowanie logarytmicznej funkcji hazardu w modelu proporcjonalnych hazardów\n na danych lung, dla kobiety w wieku 70 lat o charakterystyce \nph.karno=90", echo = FALSE}
+
+x_ax = seq(1, 1500, length.out = 100)
+y_ax1 = sapply(x_ax, function(x) ph_h(x,z1))
+
+x_ax = seq(1, 1500, length.out = 100)
+y_ax2 = sapply(x_ax, function(x) ph_h(x,z2))
+
+df <- data.frame(
+  x = x_ax,
+  y = c(y_ax1, y_ax2),
+  hazard = rep(c("ph.ecog=1", "ph.ecog=2"), each = length(x_ax))
+)
+
+ggplot(df, aes(x = x, y = y, color = hazard)) +
+  geom_line(linewidth = 1) +
+  scale_color_manual(
+    name = "Legenda",
+    values = c("ph.ecog=1" = "blue", "ph.ecog=2" = "red")
+  ) +
+  xlab("t (dni)") +
+  ylab("h(t)") +
+  ggtitle("Oszacowanie funkcji hazardu w modelu proporcjonalnych \nhazardów na danych lung, dla kobiety w wieku 70 lat o \ncharakterystyce ph.karno=90")
+```
+
+Na wykresach \ref{fig:hazfig} oraz \ref{fig:loghazfig} zauważamy, że krzywa funkcji hazardu dla ph.ecog=1 jest ściśle mniejsza niż ta dla ph.ecog=2. Jest to zgodne z intuicją (mniejsze wartości ph.ecog oznaczają wyższą sprawność danej osoby). Nie daje nam to powodów do uznania modelu za nieodpowiedni. Proporcjonalne wartości na wykresie logarytmicznym powinny być przesunięte względem siebie o stałą, co obserwujemy na wyresie \ref{fig:loghazfig}.
+
+## Zadanie 8
+
+Korzystając ze wzorów z zadania 5, Wyznaczamy oszacowanie warunkowej funkcji przeżycia:
+
+```{r}
+ph_S0 = function(x) exp(-lambda1*x^alpha1)
+
+ph_S = function(x, z) ph_S0(x)^exp(sum(beta1*z)) 
+```
+
+Używamy powyższej funkcji do oszacowania prawdopodobieńsw przeżycia 300 dni:
+
+```{r}
+ph_S(x, z1) #ph.ecog = 1
+ph_S(x, z2) #ph.ecog = 2
+
+```
+
+Dla ph.ecog=1 oraz ph.ecog=2 wynoszą one odpowiednio około 0.58 oraz 0.33. Mogliśmy się tego spodziewać, ponieważ niższe ph.ecog oznacza lepszy stan zdrowia. W dokładności, którą posługuje się R, wynik dla ph.ecog=1 jest identyczny w modelach PH oraz, wyznaczonym w zadaniu 3, AFT.
+
+## Zadanie 9
+
+```{r, fig.cap = "\\label{fig:survcomp} Porównanie oszacowań funkcji przeżycia w modelach \nATF oraz PH na danych lung, dla kobiety w wieku 70 lat\no charakterystyce ph.ecog=1 i ph.karno=90", echo = FALSE}
+
+x_ax = seq(1, 1500, length.out = 100)
+y_ax1 = sapply(x_ax, function(x) aft_S(x,z1))
+
+x_ax = seq(1, 1500, length.out = 100)
+y_ax2 = sapply(x_ax, function(x) ph_S(x,z1))
+
+df <- data.frame(
+  x = x_ax,
+  y = c(y_ax1, y_ax2),
+  model = rep(c("AFT", "PH"), each = length(x_ax))
+)
+
+ggplot(df, aes(x = x, y = y, color = model, linetype = model)) +
+  geom_line(linewidth = 1) +
+  scale_color_manual(
+    name = "Legenda",
+    values = c("AFT" = "blue", "PH" = "red")
+  ) +
+  scale_linetype_manual(
+    name = "Legenda",
+    values = c("AFT" = "solid", "PH" = "dashed")
+  ) +
+  xlab("t") +
+  ylab("S(t)") +
+  ggtitle("Porównanie oszacowań funkcji przeżycia w modelach \nATF oraz PH na danych lung, dla kobiety w wieku 70 lat\no charakterystyce ph.ecog=1 i ph.karno=90")
+
+```
+
+Z wykresu \ref{fig:survcomp} odczytujemy, że funkcje przeżycia dla obu modeli pokrywają się niemal idealnie.
+
+# Lista 11
+
+## Zadanie 1
+
+Model proporcjonalnych szans jest postaci
+
+$$
+\theta_z(t) = \theta_0(t)\exp(\beta^Tz) = \frac{1-S_0(t)}{S_0(t)}\exp(\beta^Tz).
+$$
+
+Za zmienne przyjmujemy age, sex, ph.ecog oraz ph.karno i korzystamy z funkcji prop.ods() z pakietu timereg.
+
+
+```{r}
+model_PS = prop.odds(Event(time, status == 2) ~
+                    sex +
+                    age +
+                    ph.ecog +
+                    ph.karno,
+                    data = data,
+                    n.sim = 10000)
+
+```
+
+Nasza $\beta$ znajduje się w tym obiekcie pod nazwą *gamma*.
+
+```{r}
+beta = model_PS$gamma
+beta
+```
+Odczytujemy, że z dokładnością do dwóch cyfr znaczących:
+
+$$
+\beta^T = (-0.95,\  0.013, \ 0.55, \ 1.4, \ 1.9,\  -0.0037)
+$$
+
+## Zadanie 2
+
+Ze znaków w  wektorze $\beta$ odczytujemy, że:
+
+- Kobiety oraz pacjenci z wysokim ph.karno mają dłuższe czasy życia.
+- Podeszły wiek oraz wysokie ph.ecog skracają czas życia.
+
+Tym razem nie obserwujemy, aby ph.karno skracał czas życia co wydaje się być poprawnym zachowaniem. Współczynniki dla ph.karno oraz wieku mają niskie wartości.
+
+O naszym modelu możemy powiedzieć, że logarytm ilorazu szans w chwili $t$, dla dwóch jednostek o wektorach charakterystyk $z_1$, $z_2$, jest postaci:
+
+$$
+\ln(\frac{\theta_{z_1}(t)}{\theta_{z_2}(t)}) = \beta^T(z_1 - z_2).
+$$
+
+
+## Zadanie 3
+
+Odczytuję z modelu czasy zdarzeń oraz odpowiadające im bazowe ilorazy szans $\theta_0$.
+
+```{r}
+times = model_PS$cum[,1]
+theta0 = model_PS$cum[,2]
+```
+
+Odczytuję bazową fukcję przeżycia $S_0$. 
+
+```{r}
+
+pred0 = predict(model_PS, 
+                Z = c(0, 0, 0, 0, 0, 0))
+
+S0 = as.numeric(pred0$S0)
+head(signif(S0,3))
+
+```
+
+Aby wyznaczyć skumulowaną funkcję hazardu $H_0$ korzystam z zależności
+
+$$
+H(t) = -\ln(S(t)).
+$$
+
+```{r}
+
+H0 = -log(S0)
+head(signif(H0, 3))
+
+```
+
+Na wykresie \ref{fig:survhaz} znajdziemy oszacowanie bazowowych funkcji przeżycia i skumulowanego hazardu.
+
+```{r, fig.height = 4, echo = FALSE, fig.cap="\\label{fig:survhaz} Oszacowanie bazowowych funkcji przeżycia i skumulowanego hazardu \nw modelu proporcojnalnych szans"}
+
+p1 = ggplot(data = NULL, aes(x = times, y = S0)) +
+  geom_step(col = "blue",
+            linewidth = 1) + 
+  xlab("t (dni)") + 
+  ylab("S0(t)")+
+  ggtitle("Bazowa funkcja przeżycia")
+  
+p2 = ggplot(data = NULL, aes(x = times, y = H0)) +
+  geom_step(col = "red",
+            linewidth = 1) + 
+  xlab("t (dni)") + 
+  ylab("H0(t)")+
+  ggtitle("Bazowa funkcja\nskumulowanego hazardu")
+
+
+(p1 | p2) +
+  plot_annotation(
+    title = "Oszacowanie bazowowych funkcji przeżycia \ni skumulowanego hazardu w modelu proporcojnalnych szans",
+    theme = theme(plot.title = element_text(
+                                            face = "bold",
+                                            hjust = 0.5))
+  )
+
+```
+
+
+## Zadanie 4
+
+Aby wyznaczyć skumulowane funkcje hazardu dla poszczególnych jednostek korzystamy z tego, że
+
+$$
+S_z(t) = \frac{1}{1 + \theta_0(t)\exp(\beta^Tz)}
+$$
+
+oraz
+
+$$
+H(t) = -\ln(S).
+$$
+
+
+
+```{r}
+S_z1 = 1/(1 + theta0*exp(sum(beta*z1)))
+S_z2 = 1/(1 + theta0*exp(sum(beta*z2)))
+
+H_z1 = -log(S_z1)
+H_z2 = -log(S_z2)
+```
+
+Na wykresie \ref{fig:plhaz} znajdują się skumulowane funkcje hazardu i logarytmy skumulowanej funkcji hazardu dla 70 letniej kobiety z  ph.karno=90. Zgodnie z interpretacją skali ph.ecog obserwujemy, że dla wyższej wartości tego współczynnika mamy krótsze czasu życia, czyli wyższe wartości skumulowanej funkcji hazardu. Porównując z modelem proporcjonalnych hazardów Coxa, widzimy że dla ph.ecog=2 skumulowana funkcja hazardu ma widocznie mniejsze wartości. Opuszczenie założenia o proporcjonalności hazardów spowodowało, że logarytmy skumulowannych funkcji różnią się od siebie bardziej niż przesunięciem o stałą.
+
+```{r, fig.height=6, echo = FALSE, fig.cap = "\\label{fig:plhaz} Wykresy skumulowanej funkcji hazardu i logarytmu skumulowanej funkcji hazardu dla 70 letniej kobiety z  ph.karno=90"}
+
+dfhaz = data.frame("H_z1" = H_z1,
+                "H_z2" = H_z2,
+                "t" = times)
+
+dfhaz =   pivot_longer(dfhaz,
+    cols = c("H_z1", "H_z2"),
+    names_to = "variable",    
+    values_to = "value"          
+  )
+
+p1 = ggplot(dfhaz, aes(x = t, y = value, colour = variable)) +
+  geom_step(linewidth = 1) + 
+  xlab("t (dni)") +
+  ylab("H(t)") +
+  scale_colour_manual(
+    values = c("H_z1" = "blue", "H_z2" = "red"),
+    labels = c("H_z1" = "1", "H_z2" = "2")) + 
+  labs(colour = "ph.ecog") + 
+  ggtitle("Skumulowana funkcja hazardu,\nmodel proporcjonalnych szans") + 
+  theme(plot.title = element_text(size = 10))
+
+
+
+dfloghaz = data.frame("H_z1" = log(H_z1),
+                "H_z2" = log(H_z2),
+                "t" = times)
+
+dfloghaz =   pivot_longer(dfloghaz,
+    cols = c("H_z1", "H_z2"),
+    names_to = "variable",    
+    values_to = "value"          
+  )
+
+p2 = ggplot(dfloghaz, aes(x = t, y = value, colour = variable)) +
+  geom_step(linewidth = 1) + 
+  xlab("t (dni)") +
+  ylab("ln(H(t))") +
+  scale_colour_manual(
+    values = c("H_z1" = "blue", "H_z2" = "red"),
+    labels = c("H_z1" = "1", "H_z2" = "2")) + 
+  labs(colour = "ph.ecog") + 
+  ggtitle("Logarytm skumulowanej funkcji hazardu,\nmodel proporcjonalnych szans") + 
+  theme(plot.title = element_text(size = 10))
+
+dfhaz = pivot_longer(l10df,
+    cols = c("H_z1", "H_z2"),
+    names_to = "variable",    
+    values_to = "value"          
+  )
+
+p3 = ggplot(dfhaz, aes(x = t, y = value, colour = variable)) +
+  geom_step(linewidth = 1) + 
+  xlab("t (dni)") +
+  ylab("H(t)") +
+  scale_colour_manual(
+    values = c("H_z1" = "blue", "H_z2" = "red"),
+    labels = c("H_z1" = "1", "H_z2" = "2")) + 
+  labs(colour = "ph.ecog") + 
+  ggtitle("Skumulowana funkcja hazardu,\nmodel proporcjonalnych hazardów Coxa") + 
+  theme(plot.title = element_text(size = 10))
+
+p4 = ggplot(dfhaz, aes(x = t, y = log(value), colour = variable)) +
+  geom_step(linewidth = 1) + 
+  xlab("t (dni)") +
+  ylab("ln(H(t))") +
+  scale_colour_manual(
+    values = c("H_z1" = "blue", "H_z2" = "red"),
+    labels = c("H_z1" = "1", "H_z2" = "2")) + 
+  labs(colour = "ph.ecog") + 
+  ggtitle("Logarytm skumulowanej funkcji hazardu,\nmodel proporcjonalnych hazardów Coxa") + 
+  theme(plot.title = element_text(size = 10))
+
+
+
+((p1 | p2) / (p3 | p4)) +
+  plot_annotation(
+    title = "Wykresy skumulowanej funkcji hazardu i logarytmu skumulowanej \nfunkcji hazardu dla 70 letniej kobiety z ph.karno=90",
+    theme = theme(plot.title = element_text(
+                                            face = "bold",
+                                            hjust = 0.5)))
+```
+
+## Zadanie 5
+
+Oszacowanie funkcji przeżycia wyznaczyliśmy już na potrzeby zadania 4. Za ich pomocą odczytujemy szacowane prawdopodobieństwa przeżycia 300 dni:
+
+```{r}
+P1 = S_z1[max(which(times<=300))]
+P2 = S_z2[max(which(times<=300))]
+
+P1
+P2
+```
+
+Dla ph.ecog=1 wynosi ono ok 0.67, a dla ph.ecog=2 0.46. Wynik jest zgodny z intuicją tzn. pacjent w gorszym stanie zdrowia ma mniejsze prawdopodobieństwo przeżycia 300 dni. W zadaniu 5 z listy 10 wynosiły one ok. 0.59 i  0.36, czyli wyraźnie mniej niż dla modelu proporcjonalnych szans.
+
+
+## Zadanie 6
+
+Na wykresie \ref{fig:plsurv} widzimy funkcje przeżycia dla 70 letniej kobiety z ph.karno=90 i ph.ecog=1 dla modeli proporcjonalnych szans oraz proporcjonalnych hazardów Coxa. Jak widzimy funkcja przyjmuje wyższe wartości w modelu proporcjonalnych szans, czyli przewiduje dłuższe czasy życia.
+
+```{r, echo = FALSE, fig.cap = "\\label{fig:plsurv} Wykresy funkcji przeżycia dla 70 letniej kobiety z ph.karno=90 i ph.ecog=1 dla modeli proporcjonalnych szans oraz proporcjonalnych hazardów Coxa"}
+
+
+
+df = data.frame("t" = c(times, l10df$t),
+                "S" = c(S_z1, l10df$S_z1),
+                "model" = c(rep("PS", length(times)),
+                            rep("PH", length(l10df$t))))
+
+ggplot(df, aes(x = t, y = S, colour = model)) +
+  geom_step(linewidth = 1) + 
+  xlab("t (dni)") +
+  ylab("S(t)") +
+  scale_colour_manual(
+    values = c("PS" = "blue", "PH" = "red"),
+    labels = c("PS" = "Proporcjonalnych\nszans", "PH" = "Proporcjonalnych\nhazardów Coxa")) + 
+  labs(colour = "Model") + 
+  ggtitle("Wykresy szacowanej funkcji przeżycia dla 70 letniej kobiety \nz ph.karno=90 i ph.ecog=1 dla modeli proporcjonalnych \nszans oraz proporcjonalnych hazardów Coxa") + 
+  theme(plot.title = element_text(size = 12))
+
+```
+
+
+# Lista dodatkowa
+
+## Zadanie 1
+
+Zakładamy że nasze dane są postaci $(x_i,y_i)$. Definiujemy statystykę
+
+$$
+C = \frac{c + 0.5t_x}{c+d + t_x},
+$$
+Gdzie:
+
+- c - liczba par $(x_i,y_i)$, $(x_j,y_j)$, że $x_i < x_j$ i $y_i < y_j$ lub $x_i > x_j$ i $y_i > y_j$
+- d - liczba par $(x_i,y_i)$, $(x_j,y_j)$, że $x_i < x_j$ i $y_i > y_j$ lub $x_i > x_j$ i $y_i < y_j$
+- $t_x$ - liczba par $(x_i,y_i)$, $(x_j,y_j)$, $x_i = x_j$ i $y_i \ne y_j$
+
+Nasza statystyka $C$ jest oszacowaniem $P(x_i>x_j|y_i>y_j)$ lub równoważnie $P(y_i>y_j|x_i>x_j)$. W definicji tej statystyki pomijamy dane dla który $y_i = y_j$, ponieważ takie obserwacje nie wnoszą nam istotnych informacji o poprawności modelu, nastomiast zakładamy, że jeżeli $x_i = x_j$ to w połowie przypadów poprawnie uporządkujemy $y_i$ oraz $y_j$, stąd $0.5t_x$.
+
+$C$ dla modelu AFT z zadania 1:
+
+```{r}
+concordance(model.walda)$concordance
+```
+$C$ dla modelu proporcjonalnych hazardów Coxa z zadania 2:
+
+```{r}
+concordance(model.cox)$concordance
+
+```
+Wartości statystki $C$ dla modelu przyspieszoego czasu awarii i proporcjonalnych hazardów Coxa wynoszą odpowiednio ok. 0.64 i 0.633.
+W naszych modelach rolę $x_i$ pełni (prawdopodobnie bo dokumentacja funkcji concordance() tego nie precyzuje) $-\beta^Tz_i$, a $y_i$ jest czasem życia. Pamiętając, że $C \approx P(y_i>y_j|x_i>x_j)$, od lepszego modelu spodziewalibyśmy się wyższej wartości tej statystyki. W naszym wypadku różnica jest zbyt mała aby uznać któryś z modeli za bardziej odpowiedni.
+
+
+# Zadanie dodatkowe z listy 12
+
+Funkcja *fic.coxph()* nie jest dostępna dla użytkownika, używamy jej poprzez wywołanie *fic()* na modelu *coxph()*. Niestety próba wywołania funkcji *fic()* tak aby sprawdzała wszytkie możliwe modele kończy się błędem tzn. wektor *inds0_terms* nie może zawierać samych zer. Wiedząc, że zmienna *sex* jest ważnym czynnikim w określaniu prawodpodobieństwa przeżycia oznaczamy ją jako zawsze obecną w modelu. Konieczne jest ustalenie dla jakiej jednostki obliczamy bląd. W tym zadaniu będzie to mężczyzna z *ph.ecog=1* o uśrednionych *age* oraz *ph.karno*.
+
+```{r}
+wide <- coxph(Surv(time, status == 2) ~
+                age +
+                sex +
+                ph.ecog +
+                ph.karno, data)
+
+inds0_terms <- c(0, 1, 0, 0)
+
+inds0 <- expand_inds(inds0_terms, wide)
+
+combs <- all_inds(wide, inds0)
+
+newdata <- data.frame(
+  age = mean(data$age),
+  sex = factor(1, levels = levels(data$sex)),
+  ph.ecog = factor(1, levels = levels(data$ph.ecog)),
+  ph.karno = mean(data$ph.karno)
+)
+X <- newdata_to_X(newdata, wide, intercept = FALSE)
+
+
+fic_hr <- fic(wide, inds = combs, inds0 = inds0, focus = "hr", X = X, t = 10)
+
+fic_survival <- fic(wide, inds = combs, inds0 = inds0, focus = "survival", X = X, t = 365)
+
+fic_cumhaz <- fic(wide, inds = combs, inds0 = inds0, focus = "cumhaz", X = X, t = 365)
+
+fic_hr = as.character(fic_hr[which.min(fic_hr$FIC),]$mods)
+fic_survival = as.character(fic_survival[which.min(fic_survival$FIC),]$mods)
+fic_cumhaz = as.character(fic_cumhaz[which.min(fic_cumhaz$FIC),]$mods)
+
+```
+
+Parametr *hr* oznacza błąd w oszacowaniu ryzyka względem bazowego hazardu 
+
+```{r}
+fic_hr
+```
+Odczytujemy że optymalny w tym sensie model składa się ze zmiennych *sex* oraz *ph.ecog*. Wyznaczamy parametry:
+
+```{r}
+coxph(Surv(time, status == 2) ~
+                sex +
+                ph.ecog, data)$coef
+```
+Odczytujemy, że wysokie *ph.ecog* skraca życie, a bycie kobietą wydłuża.
+
+
+Parametr *survival* oznacza błąd w oszacowaniu funkcji przeżycia w wybranym przez nas punkcie $t = 365$.
+
+```{r}
+fic_survival
+```
+Odczytujemy że optymalny w tym sensie model składa się jedynie ze zmiennej *age* oraz *sex*.
+
+```{r}
+coxph(Surv(time, status == 2) ~
+                age +
+                sex, data)$coef
+```
+Odczytujemy, że bycie kobietą wydłuża czas życia, a podeszły wiek skraca.
+
+Parametr *cumhaz* oznacza błąd w oszacowaniu skumulowanej funkcji hazardu w wybranym przez nas punkcie $t = 365$.
+
+```{r}
+fic_cumhaz
+```
+Odczytujemy że optymalny w tym sensie model jest taki sam jak dla parametru *survival*.
+
+
+
+
+

@@ -1,0 +1,617 @@
+---
+title: "**Sprawozdanie 2**"
+author: "**Igor Misterowicz**"
+date: "**2025-11-08**"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: true
+    toc: true
+    toc_depth: 3
+  word_document:  
+    toc: true
+    number_sections: true
+  html_document:
+    toc: true
+    df_print: paged
+    number_sections: true
+lang: pl
+
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "", fig.align = "center")
+
+
+set.seed(123)
+library(coin)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(cowplot)
+library(latex2exp)
+library(dplyr)
+library(tidyr)
+library(survival)
+library(astsa)
+library(tseries)
+library(expsmooth)
+library(forecast)
+library(fpp2)
+library(patchwork)
+library(AICcmodavg)
+library(coin)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(cowplot)
+library(latex2exp)
+library(dplyr)
+library(tidyr)
+library(survival)
+library(astsa)
+library(tseries)
+library(expsmooth)
+library(forecast)
+```
+
+
+\newpage
+
+# Zadanie 3. Dopasowanie modeli autoregresji do szeregu gtemp_both
+
+## Cel zadania
+
+Celem niniejszego zadania jest wykonanie pełnej analizy dotyczącej estymacji oraz diagnostyki modeli autoregresyjnych AR(p), w tym oceny jakości i poprawności ich dopasowania do danych. W ramach pracy rozpatrywane są zagadnienia wyszczególnione w spisie treści.
+
+W analizie wykorzystujemy zbiór danych gtemp_both, który zawiera informacje o temperaturze globalnej (obejmującej obszary lądowe i oceaniczne) w latach 1850–2023. Wartości te zostały obliczone jako odchylenia od średniej temperatury globalnej wyznaczonej dla okresu referencyjnego 1991–2020.
+
+```{r}
+data = gtemp_both
+
+head(data)
+```
+
+
+## a) Stacjonarność danych
+
+### Sprawdzenie stacjonarności
+
+```{r,fig.width = 5, fig.height = 3,echo = FALSE, fig.cap = "\\label{fig:gtemp} Wykres szeregu gtemp.both"}
+plot(data,
+     xlab = "Rok",
+     ylab = "Odchylenie od średniej", 
+     main = "Wykres szeregu gtemp_both")
+```
+
+Parząc na wykres \ref{fig:gtemp} widzimy, że dane nie są szeregiem stacjonarnym. Spodziewamy się, że potrzebna będzie eliminacja trendu kwadratowego. Gołym okiem nie widzimy sezonowości.
+
+```{r, fig.width = 5, fig.height = 3, echo = FALSE, fig.cap = "\\label{fig:acf} Funkcja autokorelacji szeregu gtemp.both"}
+acf(data, 
+    main = "Funkcja autokorelacji szeregu gtemp_both",
+    xlab = "Opóźnienie")
+```
+
+Na wykresie \ref{fig:acf} widzimy, że szereg gtemp_both ma wysokie wartości funkcji autokorelacji. Potwierdza to nasze przypuszczenia o niestacjonarności danych.
+
+### Transformacja różnicowania
+
+```{r, fig.height = 4, echo = FALSE, fig.cap = "\\label{fig:diff} Wyniki różnicowania szeregu na danych gtemp.both"}
+par(mfrow = c(2,2))
+
+plot(diff(data),
+     xlab = "Rok",
+     ylab = "Odchylenie od średniej", 
+     main = "Dane gtemp_both po\n jednokrotnym zróżnicowaniu")
+
+plot(diff(data, differences = 3),
+     xlab = "Rok",
+     ylab = "Odchylenie od średniej", 
+     main = "Dane gtemp_both po\n dwukrotnym zróżnicowaniu")
+
+acf(diff(data, differences = 1),
+    main = "ACF dla gtemp_both po\n jednokrotnym zróżnicowaniu",
+    xlab = "Opóźnienie")
+
+acf(diff(data, differences = 2),
+    main  = "ACF dla gtemp_both po\n dwukrotnym zróżncowaniu",
+    xlab = "Opóźnienie")
+
+```
+
+Jak widzimy na wykresie \ref{fig:diff} jednokrotne zróżnicowanie naszych danych wyeliminowało większość korelacji występującej między danymi. Tej transformacji będziemy używać w dalszej cześci analizy, ponieważ dwukrotne zróżnicownie nie poprawiło uzyskanych rezultatów.
+
+### Trend wielomianowy
+
+```{r, fig.height = 6, echo = FALSE, fig.cap = "\\label{fig:trend} Wyniki eliminacji trendu wielomianowego na danych gtemp.both"}
+par(mfrow = c(2,2))
+
+model.liniowy <- tslm(data~trend)
+trend.liniowy <- model.liniowy$fitted
+plot(data - trend.liniowy,
+     xlab = "Rok",
+     ylab = "Odchylenie od średniej", 
+     main = "Gtemp_both po redukcji\n trendu liniowego")
+
+quad_reg = tslm(data~I(trend^2)+trend)
+trend.kwadrat <- quad_reg$fitted
+plot(data - trend.kwadrat,
+     xlab = "Rok",
+     ylab = "Odchylenie od średniej", 
+     main = "Gtemp_both po redukcji\n trendu kwadratowego")
+
+acf(data - trend.liniowy,
+    main  = "ACF dla gtemp_both po redukcji\n trendu liniowego",
+    xlab = "Opóźnienie")
+
+acf(data - trend.kwadrat,
+    main  = "ACF dla gtemp_both po redukcji\n trendu kwadratowego",
+    xlab = "Opóźnienie")
+
+```
+
+Jak widzimy na wykresie \ref{fig:trend}, trend liniowy słabo opisuje nasze dane. Dużo lepiej sprawdził się trend kwadratowy, dlatego w dalszych etapach nie będziemy rozważać wariantu liniowego.
+
+## b) Wybór optymalnych rzędów modeli autoregresji AR(p)
+
+Dobieramy współczynnik $p$ dla modelu z trendem kwadratowym. Na wykresie \ref{fig:pselectqd} widzimy, że PACF zanika dla opóźnień większych od 1. Dla tej wartości mamy również najniższe AIC oraz FPE, dlatego ustalamy $p=1$.
+
+```{r, fig.height = 8, echo = FALSE, fig.cap = "\\label{fig:pselectqd} Wskaźniki na dobór odpowiedniego rzędu modelu AR dla danych gtemp.both bez trendu kwadratowego"}
+
+par(mfrow = c(3,1))
+pacf(data - trend.kwadrat,
+     main = "Cząstkowa funkcja autokorelacji",
+     xlab = "Opóźnienie",
+     ylab =  "PACF")
+
+n <- length(data - trend.kwadrat)
+p.max <- floor(10*log10(n))
+
+ar.aic <- ar(data - trend.kwadrat,aic = TRUE)
+AIC <- ar.aic$aic
+plot(0:p.max,
+     AIC,
+     type="b",
+     xlab="p",
+     ylab = "Odlegość",
+     main = "Odległość od optymalnego AIC") 
+
+n <- length(data - trend.kwadrat)
+fpe_vals <- sapply(0:10, function(p) {
+  fit <- arima(data - trend.kwadrat, order = c(p,0,0))
+  sigma2 <- fit$sigma2
+  sigma2 * (n + p) / (n - p)
+})
+
+plot(x = 0:10,
+     y = fpe_vals,
+     type="b",
+     xlab = "p",
+     ylab = "FPE",
+     main = "Wartosci FPE")
+
+```
+
+W przypadku danych po różnicowaniu, wskaźniki widoczne na wykresie \ref{fig:pselectdif} nie wskazują już jednoznacznie opytmalnej liczby parametrów. PACF zanika dla opóźnień większych od 5, dla tej wartości mamy również najniższe AIC. Z drugiej strony FPE wskazuje że optymalny będzie rząd równy jeden. Mamy dwa głosy do jednego za $p=5$ i ten rząd modelu przyjmiemy w dalszych częściach analizy.
+
+
+```{r, fig.height = 7, echo = FALSE, fig.cap = "\\label{fig:pselectdif} Wskaźniki na dobór odpowiedniego rzędu modelu AR dla danych gtemp.both po zróżnicowaniu"}
+
+par(mfrow = c(3,1))
+pacf(diff(data),
+     main = "Cząstkowa funkcja autokorelacji",
+     xlab = "Opóźnienie",
+     ylab = "PACF")
+
+n <- length(data - trend.kwadrat)
+p.max <- floor(10*log10(n))
+
+ar.aic <- ar(diff(data),aic = TRUE)
+AIC <- ar.aic$aic
+plot(0:p.max,
+     AIC,
+     type="b",
+     xlab="p",
+     ylab = "odlegość",
+     main = "Odległość od optymalnego AIC") 
+
+n <- length(diff(data))
+fpe_vals <- sapply(0:10, function(p) {
+  fit <- arima(data - trend.kwadrat, order = c(p,0,0))
+  sigma2 <- fit$sigma2
+  sigma2 * (n + p) / (n - p)
+})
+
+plot(x = 0:10,
+     y = fpe_vals,
+     type="b",
+     xlab = "p",
+     ylab = "FPE",
+     main = "Wartosci FPE")
+
+```
+
+
+
+
+## c) Dopasowanie modelu AR(p)
+
+Wobec wybranych wcześniej $p$, nasz model na danych po eliminacji trendu kwadratowego jest postaci:
+
+$$
+X_n = \phi_1 X_{n-1} + \varepsilon,
+$$
+a po różnicowaniu:
+
+$$
+X_n = \psi_1 X_{n-1} + ...+\psi_5X_{n-5} + \varepsilon,
+$$
+
+
+
+gdzie $\phi_i, \psi_i \in \mathbb{R}$, a $\varepsilon$ jest resztą.
+
+Dopasowujemy współczynniki dla modelu AR(1) po eliminacji trendu kwadratowego:
+
+```{r}
+
+quad_model_yw = ar(data - trend.kwadrat,
+                    method = "yule-walker", 
+                    order.max = 1,
+                    aic = F)
+
+
+quad_model_mle = ar(data - trend.kwadrat,
+                    method = "mle",
+                    order.max = 1,
+                    aic = F)
+
+```
+
+```{r, echo = FALSE}
+
+df = data.frame(rbind(quad_model_yw$ar,
+                      quad_model_mle$ar))
+df = signif(df,3)
+
+rownames(df) = c("yule-walker", "mle")
+colnames(df) = "$\\phi_1$"
+
+kable(df, escape = T, caption = "\\label{tab:fitquad} Współczynnik $\\phi_1$ modelu AR(1) dla danych gtemp_both po eliminacji trendu kwadratowego")
+```
+
+Dopasowujemy współczynniki do modelu AR(5) po transformacji różnicowania:
+
+```{r}
+dif_model_yw = ar(diff(data),
+              method = "yule-walker", 
+              order.max = 5,
+              aic = F)
+
+dif_model_mle = ar(diff(data),
+               method = "mle",
+               order.max = 5,
+               aic = F)
+
+```
+
+```{r, echo = FALSE}
+
+df = data.frame(rbind(dif_model_yw$ar,
+                      dif_model_mle$ar))
+df = signif(df,3)
+
+rownames(df) = c("Yule-walker", "Mle")
+colnames(df) = sapply(1:5, FUN = function(x) paste0("$\\psi_", x, "$"))
+
+kable(df, escape = T, caption = "\\label{tab:fitdif} Współczynniki $\\psi_i$ modelu AR(5) dla danych gtemp_both po różnicowaniu")
+
+```
+
+W tabelach \ref{tab:fitquad} oraz \ref{tab:fitdif} widzimy współczynniki $\phi_1$ oraz $\psi_i$ z naszych modeli dopasowanych za pomocą metod Yula-Walkera oraz największej wiarygodności (MLE). Obie metody zwracają podobny wynik i spodziwamy się, że ich wybór nie będzie miał znaczenia dla dalszej części zadania.
+
+## d) Asymptotyczne przedziały ufności oraz testy istotności dla parametrów modelu AR(p)
+
+### Wyznaczenie asymptotycznych przedziałów ufności
+
+Korzystamy z twierdzenia o asymtotycznej normalności:
+
+$$
+\hat{\phi_i}  \approx \mathcal{N}(\phi_i, \frac{\sigma_i^2}{n}),
+$$
+stąd przedział ufności na poziomie $\alpha$ jest postaci:
+
+$$
+\hat{\phi_i} \pm z_{1-\alpha/2}\frac{\sigma_i}{\sqrt{n}},
+$$
+gdzie $z$ jest funkcją kwantylową rozkładu normalnego.
+
+Korzystamy z faktu że dostępne w modelu *asy.var.coef* to nasze
+$\frac{\sigma_i^2}{n}$. Ustalamy $\alpha = 0.05$.
+
+Obliczamy przedziały ufności dla współczynnika $\phi_1$ w modelu z trendem kwadratowym:
+
+```{r}
+alpha = 0.05
+quad_var_yw = quad_model_yw$asy.var.coef
+quad_var_mle = quad_model_mle$asy.var.coef
+
+quad_range_yw = qnorm(1-alpha/2)*sqrt(quad_var_yw)
+quad_range_mle = qnorm(1-alpha/2)*sqrt(quad_var_mle)
+
+quad_int_yw = paste0("[",
+                signif(quad_model_yw$ar-quad_range_yw,3),
+                ", ",
+                signif(quad_model_yw$ar+quad_range_yw,3),
+                "]")
+
+quad_int_mle = paste0("[",
+                signif(quad_model_mle$ar-quad_range_mle,3),
+                ", ",
+                signif(quad_model_mle$ar+quad_range_mle,3),
+                "]")
+
+```
+
+```{r, echo = FALSE}
+
+df = as.data.frame(rbind(quad_int_yw, quad_int_mle))
+
+colnames(df) = c("$\\phi_1$")
+rownames(df) = c("yule-walker", "MLE")
+
+kable(df, caption = "\\label{tab:intquad} Przedziały ufności dla współczynnika $\\phi_1$ dla modelu AR(1) na danych gtemp.both po redukcji trendu kwadratowego")
+
+```
+
+Obliczam przedziały ufności dla współczynników $\psi_i$ modelu na zróżnicowanych danych.
+
+```{r}
+alpha = 0.05
+dif_var_yw = diag(dif_model_yw$asy.var.coef)
+dif_var_mle = diag(dif_model_mle$asy.var.coef)
+
+dif_range_yw = qnorm(1-alpha/2)*sqrt(dif_var_yw)
+dif_range_mle = qnorm(1-alpha/2)*sqrt(dif_var_mle)
+
+dif_int_yw = paste0("[",
+                signif(dif_model_yw$ar-dif_range_yw,3),
+                ", ",
+                signif(dif_model_yw$ar+dif_range_yw,3),
+                "]")
+
+dif_int_mle = paste0("[",
+                signif(dif_model_mle$ar-dif_range_mle,3),
+                ", ",
+                signif(dif_model_mle$ar+dif_range_mle,3),
+                "]")
+
+```
+
+```{r, echo = FALSE}
+
+df = as.data.frame(rbind(dif_int_yw, dif_int_mle))
+
+colnames(df) = paste0("$\\psi_", 1:5, "$")
+rownames(df) = c("yule-walker", "MLE")
+
+kable(df, caption = "\\label{tab:intdiff} Przedziały ufności dla współczynników $\\psi_i$ dla modelu AR(5) na różnicowanych danych gtemp.both")
+
+```
+
+Nasze realizacje przedziałów znajdziemy w tabelach \ref{tab:intquad} oraz \ref{tab:intdiff}. Nie obserwujemy znaczących różnic spowodowanych metodą dopasowania modelu.
+
+### Testy istotności współczynników modelu
+
+Używany przez nas wskaźnik istotności jest postaci:
+
+$$
+ratio = \frac{\psi_i}{1,96se(\psi_i)}.
+$$
+Jeżeli $|ratio| < 1$ współczynnik uznajemy za statystycznie nieistotny.
+Obliczam współczynniki istotności dla modelu dopasowanego na danych po eliminacji trendu kwadratowego:
+
+```{r}
+quad_ratio_yw = quad_model_yw$ar/(1.96*sqrt(quad_var_yw))
+quad_ratio_mle = quad_model_mle$ar/(1.96*sqrt(quad_var_mle))
+
+```
+
+```{r, echo = FALSE}
+
+df = as.data.frame(rbind(quad_ratio_yw, quad_ratio_mle))
+
+colnames(df) = c("$\\phi_1$")
+rownames(df) = c("Yule-Walker", "MLE")
+
+df = round(df,2)
+
+kable(df, caption = "\\label{tab:pvalquad} Wskaźnik istotności współczynnika $\\phi_1$ modelu AR(1) na danych gtemp.both po eliminacji trendu kwadratowego")
+
+```
+
+Obliczam współczyniki istotności dla modelu dopasowanego na danych po zrożnicowaniu:
+
+```{r}
+dif_ratio_yw = dif_model_yw$ar/(1.96*sqrt(dif_var_yw))
+dif_ratio_mle = dif_model_mle$ar/(1.96*sqrt(dif_var_mle))
+
+```
+
+```{r, echo  = FALSE}
+df = as.data.frame(rbind(dif_ratio_yw, dif_ratio_mle))
+
+colnames(df) = paste0("$\\psi_", 1:5,"$")
+rownames(df) = c("Yule-Walker", "MLE")
+
+df = round(df,2)
+kable(df, caption = "\\label{tab:pvaldif} Wskaźnik istotności współczynników $\\psi_i$ modelu AR(5) na danych gtemp.both po zróżnicowaniu ")
+
+```
+
+Wskaźniki istotności znajdziemy w tabelach \ref{tab:pvalquad} oraz \ref{tab:pvaldif}. Wszystkie mają moduł większy od 1, czyli uznajemy je za statystycznie istotne.
+
+## e) Testy dopasowania modelu
+
+Funkcja autokorelacj na resztach z modelu z trendem kwadratowym:
+
+```{r, fig.height=8,  fig.cap = "\\label{fig:quadresidfit} ACF na resztach z modelu AR(1) dopasowanego na danych gtemp.both po eliminacji trendu kwadratowego"}
+par(mfrow = c(2,1))
+
+acf(na.omit(quad_model_yw$resid),
+    main = "ACF, dopasowanie metodą Yula-Walkera",
+    xlab = "Opóźnienie")
+acf(na.omit(quad_model_mle$resid),
+    main = "ACF, dopasowanie metodą MLE",
+    xlab = "Opóźnienie")
+
+```
+
+Funkcja autokorelacj na resztach z modelu z różnicowaniem:
+
+```{r, fig.height=8, fig.cap = "\\label{fig:difresidfit} ACF na resztach z modelu AR(1) dopasowanego na danych gtemp.both po różnicowaniu"}
+par(mfrow = c(2,1))
+
+acf(na.omit(dif_model_yw$resid),
+    main = "ACF, dopasowanie metodą Yula-Walkera",
+    xlab = "Opóźnienie")
+acf(na.omit(dif_model_mle$resid),
+    main = "ACF, dopasowanie metodą MLE",
+    xlab = "Opóźnienie")
+
+```
+
+Formalne testy Ljunga-Boxa białoszumowości dla reszt z modelu z trendem kwadratowym:
+
+```{r}
+p1 = Box.test(na.omit(quad_model_yw$resid),
+              type = "Ljung-Box")$p.value
+p2 = Box.test(na.omit(quad_model_mle$resid),
+              type = "Ljung-Box")$p.value
+
+```
+
+```{r, echo = FALSE}
+
+df = data.frame("Yule-Walker" = signif(p1,3),
+                "MLE" = signif(p2,3))
+rownames(df) = "p-wartość"
+
+kable(df, caption = "\\label{tab:quadbox.pval} P-wartość testu Ljunga-Boxa na resztach z modelu AR(1) na danych gtemp.both z trendem kwadratowym")
+
+```
+
+Formalne testy Ljunga-Boxa białoszumowości dla reszt z modelu z różnicowaniem:
+
+```{r}
+p1 = Box.test(na.omit(dif_model_yw$resid),
+              type = "Ljung-Box")$p.value
+p2 = Box.test(na.omit(dif_model_mle$resid),
+              type = "Ljung-Box")$p.value
+
+```
+
+```{r, echo = FALSE}
+
+df = data.frame("Yule-Walker" = signif(p1,3),
+                "MLE" = signif(p2,3))
+rownames(df) = "p-wartość"
+
+kable(df, caption = "\\label{tab:difbox.pval} P-wartość testu Ljunga-Boxa na resztach z modelu AR(5) na danych gtemp.both po różnicowaniu ")
+
+```
+
+Na wykresach \ref{fig:quadresidfit} i \ref{fig:difresidfit} oraz w tabelach \ref{tab:quadbox.pval} i \ref{tab:difbox.pval} zajdziemy wyniki testów białoszumowości na resztach z modelu AR(1). Mamy niskie wartości funkcji autokorelacji i nie odrzucamy hipotezy o bialoszumowości reszt. Wnioskujemy, że wszystkie modele są dobrze dopasowane.
+
+## f) Predykcje
+
+Na wykresie \ref{fig:quadpred} znajdziemy, wyznaczone za pomocą modelu z eliminacją trendu kwadratowego, prognozy na przyszłe wartości odchylenia od średniej temperatury dla kolejnych 50 lat. Zauważamy, że prognoza jest naturalnym przedłużeniem dostrzeganego gołym okiem kwadratowgo trendu wzrostowego i wróży szybkie ocieplenie klimatu.
+
+Wykres \ref{fig:diffpred} przedstawia prognozy oparte na modelu z użyciem różnicowania. Tym razem przewidywana zmiana temperatuy przebiega łagodniej, w sposób liniowy. Nie jest ona naturalnym przedłużeniem widocznego tredndu wzrostowego.
+
+
+W obu przypach modele prognozują nieznaczy spadek temperatury w 2024 roku oraz zapowiadają wzrosty w kolejnych latach. 
+
+Wybór metody dopasowania Yulea-Walkera czy MLE nie miał istotnego znaczenia dla otrzymanych prognoz.
+
+```{r, fig.height=6, fig.cap = "\\label{fig:quadpred} Predykcje za pomocą modeli AR(1) na danych gtemp.both z trendem kwadratowym"}
+par(mfrow = c(2,1))
+
+ahead = 50
+pred = predict(quad_model_yw, n.ahead = ahead)
+
+trend = predict.lm(quad_reg, newdata = data.frame(trend = 175:(175+ahead -1)))
+
+forecast = pred$pred + trend
+
+ts.plot(gtemp_both,
+        forecast,
+        lty = c(1,2),
+        col = c("black","red"),
+        main = "Metoda dopasowania Yulea-Walkera",
+        xlab = "Rok")
+
+pred = predict(quad_model_mle, n.ahead = ahead)
+
+trend = predict.lm(quad_reg, newdata = data.frame(trend = 175:(175+ahead -1)))
+
+forecast = pred$pred + trend
+
+ts.plot(gtemp_both, forecast,
+        lty = c(1,2),
+        col = c("black","red","blue","blue"),
+        main = "Metoda dopasowania MLE",
+        xlab = "Rok")
+
+```
+
+```{r, fig.height=6, fig.cap = "\\label{fig:diffpred} Predykcje za pomocą modeli AR(5) na zróżnicowanych danych gtemp.both"}
+par(mfrow = c(2,1))
+
+ahead = 50
+
+pred = predict(dif_model_yw, n.ahead = ahead)
+
+last = gtemp_both[length(gtemp_both)]
+
+forecast = diffinv(pred$pred, xi = last)
+
+ts.plot(
+  gtemp_both,
+  forecast,
+  lty = c(1, 2),
+  col = c("black", "red"),
+  main = "Metoda dopasowania Yulea-Walkera",
+  xlab = "rok"
+)
+
+pred = predict(dif_model_mle, n.ahead = ahead)
+
+last = gtemp_both[length(gtemp_both)]
+
+forecast = diffinv(pred$pred, xi = last)
+
+ts.plot(
+  gtemp_both,
+  forecast,
+  lty = c(1, 2),
+  col = c("black", "red"),
+  main = "Metoda dopasowania MLE",
+  xlab = "rok"
+)
+
+
+
+```
+
+## h) Porównanie podejść do modelowania
+
+Metoda eliminacji trendu kwadratowego dała wizualnie bardzo przekonywujący model. Jest ona bardziej ryzykownym podejściem, ponieważ obecny na oryginalnym wykresie trend kwadratowy może być przypadkowo wygenerowany przez błądzenie losowe. Niewątpliwą zaletą tego podejścia jest prosta postać modelu ($p=1$, deterministyczny trend).
+
+W obliczu niepewności czy założenie o obecności deterministycznego trendu jest realistyczne, lepszym podejściem będzie model z wykorzystaniem różnicowania. Prognozy, które otrzymaliśmy za jego pomocą zapowiadają liniowe ocieplenie klimatu, wolniejsze niż w przypadku trendu kwadratowego.
+
+Zastosowanie metod dopasowania modelu (MLE lub Yulea-Walkera) nie wpłynęło na interpretację wyników.
+
