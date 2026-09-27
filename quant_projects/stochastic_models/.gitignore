@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pakiety
+*.egg-info/
+dist/
+build/
+
+# Środowiska wirtualne (jeśli je tworzysz w projekcie)
+venv/
+.env/
+
+# Cache narzędzi
+.pytest_cache/
+.mypy_cache/
+.venv/
