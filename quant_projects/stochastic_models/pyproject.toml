@@ -1,18 +1,23 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "sde_simulator"
+name = "stochastic-models"
 version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
 authors = [
-  { name="Twoje Imie", email="twoj@email.com" },
+    { name = "282245", email = "282245@student.pwr.edu.pl" }
 ]
-description = "Symulator procesów stochastycznych"
-requires-python = ">=3.7"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.3",
+    "pandas>=3.0.6",
+    "quantlib>=1.43",
+    "scikit-learn>=1.9.1",
+]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.scripts]
+stochastic-models = "stochastic_models:main"
 
-[tool.pytest.ini_options]
-pythonpath = ["src"]
+[build-system]
+requires = ["uv_build>=0.12.11,<0.13.0"]
+build-backend = "uv_build"

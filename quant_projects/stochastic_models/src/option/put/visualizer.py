@@ -88,7 +88,7 @@ class Visualizer:
             ax.legend()
 
             if save == True:
-                  plt.savefig('tests/put_fig')
+                  plt.savefig('outputs/put_fig')
 
             plt.close(fig)
             return fig 

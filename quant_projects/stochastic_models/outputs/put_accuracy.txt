@@ -1,0 +1,17 @@
+Parameters used : (S0 = 100, r = 0.1, sigma = 0.5, T = 1)
+Comparison of European put option prices:
+      QuantLib      MyPut
+50    0.788932   0.793352
+75     5.07654   5.153959
+100  14.410487  14.499102
+125  28.207776  28.132374
+150  45.215799  45.127117
+simulation parameters : (n_sim = 100000, n_intervals = 100)
+Grid 1000x1000)
+Comparison of American put option prices:
+      QuantLib      MyPut
+50    0.820484   0.827148
+75     5.38054   5.378095
+100  15.601698  15.671797
+125  31.258075   31.13514
+150   51.36468  51.242322

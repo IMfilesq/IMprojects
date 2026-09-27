@@ -82,7 +82,7 @@ class Visualizer:
             ax.legend()
 
             if save == True:
-                  plt.savefig('tests/area_option_fig')
+                  plt.savefig('outputs/area_option_fig')
 
             plt.close(fig)
             return fig 
